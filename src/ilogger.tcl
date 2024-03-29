@@ -1,8 +1,35 @@
 
+# Hey Emacs, use -*- Tcl -*- mode
 
+########################## Program details ###########################
 
-package require tcladu
+set thisfile [file normalize [info script]]
 
+# The name of this program.  This will get used to identify logfiles,
+# configuration files and other file outputs.
+set program_name [file rootname [file tail $thisfile]]
+
+# Directory where this script lives
+set program_directory [file dirname $thisfile]
+
+# Directory from which the script was invoked
+set invoked_directory [pwd]
+
+####################### Packages and libraries #######################
+
+# Load tcladu
+try {
+    set version [package require tcladu]
+    puts "Loaded tcladu version $version"
+} trap {} {message optdict} {
+    puts "Error requiring tcladu"
+    puts $message
+    exit
+}
+
+######################## Command-line parsing ########################
+
+exit
 
 try {
     set rm [visa::open-default-rm]
@@ -10,6 +37,52 @@ try {
     puts "Error opening default resource manager"
     puts $message
     exit
+}
+
+proc colorputs {newline text color} {
+
+    set colorlist [list black red green yellow blue magenta cyan white]
+    set index 30
+    foreach fgcolor $colorlist {
+	set ansi(fg,$fgcolor) "\033\[1;${index}m"
+	incr index
+    }
+    set ansi(reset) "\033\[0m"
+    switch -nocase $color {
+	"red" {
+	    puts -nonewline "$ansi(fg,red)"
+	}
+	"green" {
+	    puts -nonewline "$ansi(fg,green)"
+	}
+	"yellow" {
+	    puts -nonewline "$ansi(fg,yellow)"
+	}
+	"blue" {
+	    puts -nonewline "$ansi(fg,blue)"
+	}
+	"magenta" {
+	    puts -nonewline "$ansi(fg,magenta)"
+	}
+	"cyan" {
+	    puts -nonewline "$ansi(fg,cyan)"
+	}
+	"white" {
+	    puts -nonewline "$ansi(fg,white)"
+	}
+	default {
+	    puts "No matching color"
+	}
+    }
+    switch -exact $newline {
+	"-nonewline" {
+	    puts -nonewline "$text$ansi(reset)"
+	}
+	"-newline" {
+	    puts "$text$ansi(reset)"
+	}
+    }
+
 }
 
 # open device
