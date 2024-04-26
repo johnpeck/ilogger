@@ -1,0 +1,5 @@
+# Ignore the org file
+*.org
+
+# Ignore temporary files
+*~

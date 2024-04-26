@@ -132,6 +132,21 @@ proc open_relay { adu100_index } {
     }
 }
 
+proc close_relay { adu100_index } {
+    # Close the relay
+    #
+    # Arguments:
+    #   adu100_index -- integer index choosing the ADU100
+    set result [tcladu::send_command $adu100_index "SK0"]
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	return ok
+    } else {
+	colorputs -newline "Problem closing the relay" red
+	exit
+    }
+}
+
 
 ########################## Main entry point ##########################
 
@@ -190,6 +205,10 @@ try {
 }
 
 puts [open_relay $adu100_index]
+
+after 1000
+
+puts [close_relay $adu100_index]
 
 close $fid
 exit
