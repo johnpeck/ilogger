@@ -19,7 +19,7 @@ set invoked_directory [pwd]
 
 # Load tcladu
 try {
-    set version [package require tcladu]
+    set version [package require -exact tcladu 1.1.1]
     puts "Loaded tcladu version $version"
 } trap {} {message optdict} {
     puts "Error requiring tcladu"
@@ -27,16 +27,34 @@ try {
     exit
 }
 
-######################## Command-line parsing ########################
-
-exit
-
+# Command-line parsing
+#
+# cmdline comes from tcllib
 try {
-    set rm [visa::open-default-rm]
+    set version [package require cmdline]
+    puts "Loaded cmdline version $version"
 } trap {} {message optdict} {
-    puts "Error opening default resource manager"
+    puts "Error requiring cmdline"
     puts $message
     exit
+}
+######################## Command-line parsing ########################
+
+set usage "-- "
+append usage "Plot sense resistor currents from ADU100"
+append usage "\n\n"
+append usage "usage: [file tail $thisfile] \[options\]"
+
+lappend options [list sn.arg "" "ADU100 serial number (Empty if only one)"]
+
+set invocation $argv
+try {
+    array set params [::cmdline::getoptions argv $options $usage]
+} trap {CMDLINE USAGE} {msg o} {
+    # Trap the usage signal, print the message, and exit the application.
+    # Note: Other errors are not caught and passed through to higher levels!
+    puts $msg
+    exit 1
 }
 
 proc colorputs {newline text color} {
@@ -85,59 +103,85 @@ proc colorputs {newline text color} {
 
 }
 
-# open device
-set visaAddr "USB0::0x1AB1::0x09C4::DM3R233202380::INSTR"
-if { [catch { set vi [visa::open $rm $visaAddr] } rc] } {
-    puts "Error opening instrument ‘$visaAddr‘\n$rc"
-    # ‘rm‘ handle is closed automatically by Tcl
+proc initialize_adu100 { adu100_index } {
+    # Claim interface 0 on the ADU100
+    #
+    # Arguments:
+    #  adu100_index -- integer index choosing the ADU100
+    set result [tcladu::initialize_device $adu100_index]
+    if { $result == 0 } {
+	return ok
+    } else {
+	colorputs -newline "Failed to initialize ADU100 $adu100_index, return value $result" red
+	exit
+    }
+}
+
+proc open_relay { adu100_index } {
+    # Open the relay
+    #
+    # Arguments:
+    #   adu100_index -- integer index choosing the ADU100
+    set result [tcladu::send_command $adu100_index "RK0"]
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	return ok
+    } else {
+	colorputs -newline "Problem openning the relay" red
+	exit
+    }
+}
+
+
+########################## Main entry point ##########################
+
+# Record the invocation
+set output_file_tail "log.dat"
+set output_file_path ${program_directory}/$output_file_tail
+try {
+    set fid [open $output_file_path a+]
+    if { $invocation ne ""} {
+	puts $fid $invocation	
+    }
+    close $fid
+} trap {} {message optdict} {
+    puts $message
     exit
 }
-# Set timeout
-chan configure $vi -timeout 500
 
-# modinfo is needed to show loaded package versions
-proc modinfo {modname} {
-    # Return loaded module details.
-    set modver [package require $modname]
-    set modlist [package ifneeded $modname $modver]
-    set modpath [lindex $modlist end]
-    return "Loaded $modname module version $modver from ${modpath}."
+try {
+    set serial_number_list [tcladu::serial_number_list]
+    puts "Found serial numbers [join $serial_number_list]"
+} trap {} {message optidict} {
+    puts $message
+    puts "Failed to find any ADU100s...maybe you need to plug cycle them?"
+    exit
 }
 
-proc send_command {channel command} {
-    puts $channel $command
-    after 1
-}
-
-proc iterint {start points} {
-    # Return a list of increasing integers starting with start with
-    # length points
-    set count 0
-    set intlist [list]
-    while {$count < $points} {
-	lappend intlist [expr $start + $count]
-	incr count
+if {$params(sn) ne ""} {
+    set adu100_index [lsearch $serial_number_list $params(sn)]
+    if {$adu100_index > -1} {
+	colorputs -newline "Found serial number $params(sn) at index $adu100_index" green
     }
-    return $intlist
+} else {
+    set adu100_index 0
 }
 
-# Main entry point
-puts "* [modinfo tclvisa]\n"
+puts -nonewline "Initializing ADU100 0..."
+puts [initialize_adu100 $adu100_index]
 
-chan configure stdin -blocking 0 -buffering none
+set result [tcladu::clear_queue $adu100_index]
+if { [lindex $result 0] == 0 } {
+    colorputs -newline "Cleared ADU100 $adu100_index in [lindex $result 1] ms" green
+} else {
+    colorputs -newline "Failed to clear ADU100 $adu100_index, return value $result" red
+    exit
+}
 
-# Send command to instrument. New line character is added automatically by ‘puts‘.
-puts $vi "*CLS"
 
-# Send command to query device identity string
-send_command $vi "*IDN?"
-
-# Read device’s answer. Trailing new line character is removed by ‘gets‘.
-set id [gets $vi]
-# puts "Identity of ‘$visaAddr‘ is ‘$id‘"
 
 # Open the datafile
-set datafile "clogger.dat"
+set datafile "ilogger.dat"
 try {
     set fid [open $datafile w+]
 } trap {} {message optdict} {
@@ -145,7 +189,12 @@ try {
     exit
 }
 
-puts "Connected to $id"
+puts [open_relay $adu100_index]
+
+close $fid
+exit
+
+puts "Connected to ADU100 $adu100_index"
 puts ""
 puts "Logging to $datafile"
 puts ""
