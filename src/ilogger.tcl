@@ -147,6 +147,32 @@ proc close_relay { adu100_index } {
     }
 }
 
+proc calibrate_input { adu100_index  gain_setting } {
+    # Have the ADU100 perform an auto-calibration on the AN1 analog
+    # input.
+    #
+    # Arguments:
+    #   adu100_index -- integer index choosing the ADU100
+    #   gain_setting -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
+
+    if { $gain_setting <= 7 && $gain_setting >= 0 } {
+	# This is fine
+    } else {
+	set gain_setting 0
+    }
+    # Calibrate input 1 with a gain of gain_setting
+    set result [tcladu::query $adu100_index "RUC1$gain_setting"]
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	set value [lindex $result 1]
+	puts "Returned value was $value"
+	return ok
+    } else {
+	colorputs -newline "Problem calibrating AN1" red
+	exit
+    }
+}
+
 
 ########################## Main entry point ##########################
 
@@ -204,11 +230,13 @@ try {
     exit
 }
 
-puts [open_relay $adu100_index]
-
-after 1000
 
 puts [close_relay $adu100_index]
+# Wait for reading to settle
+after 1000
+calibrate_input 0 0
+
+after 1000 [open_relay $adu100_index]
 
 close $fid
 exit
