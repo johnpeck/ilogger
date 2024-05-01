@@ -3,3 +3,6 @@
 
 # Ignore temporary files
 *~
+
+# Ignore the command-line log
+src/cli_log.dat

@@ -47,7 +47,6 @@ append usage "usage: [file tail $thisfile] \[options\]"
 
 lappend options [list sn.arg "" "ADU100 serial number (Empty if only one)"]
 
-set invocation $argv
 try {
     array set params [::cmdline::getoptions argv $options $usage]
 } trap {CMDLINE USAGE} {msg o} {
@@ -173,17 +172,26 @@ proc calibrate_input { adu100_index  gain_setting } {
     }
 }
 
+proc anx_se_voltage { digitized_counts gain } {
+    # Convert a fixed-point single-ended AN1 or AN0 measurement to
+    # floating-point volts
+    #
+    # Arguments:
+    #   digitized_counts -- Raw output from the read/query command
+    #   gain -- 1,2,4,8,...,128 gain value
+    set voltage [expr (double($digitized_counts) / 65535) * (2.5 / $gain)]
+    return $voltage
+}
+
 
 ########################## Main entry point ##########################
 
 # Record the invocation
-set output_file_tail "log.dat"
+set output_file_tail "cli_log.dat"
 set output_file_path ${program_directory}/$output_file_tail
 try {
     set fid [open $output_file_path a+]
-    if { $invocation ne ""} {
-	puts $fid $invocation	
-    }
+    puts $fid "tclsh ilogger.tcl $argv"	
     close $fid
 } trap {} {message optdict} {
     puts $message
