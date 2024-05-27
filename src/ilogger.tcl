@@ -19,7 +19,7 @@ set invoked_directory [pwd]
 
 # Load tcladu
 try {
-    set version [package require -exact tcladu 1.1.1]
+    set version [package require -exact tcladu 1.1.3.4]
     puts "Loaded tcladu version $version"
 } trap {} {message optdict} {
     puts "Error requiring tcladu"
@@ -182,7 +182,7 @@ proc calibrate_input { adu100_index  gain_setting } {
 	set gain_setting 0
     }
     # Calibrate input 1 with a gain of gain_setting
-    set result [tcladu::query $adu100_index "RUC1$gain_setting"]
+    set result [tcladu::query $adu100_index "RBC1$gain_setting"]
     set success_code [lindex $result 0]
     if {$success_code == 0} {
 	set value [lindex $result 1]
@@ -194,14 +194,36 @@ proc calibrate_input { adu100_index  gain_setting } {
     }
 }
 
-proc anx_se_volts { digitized_counts gain } {
+proc gain_from_setting { gain_setting } {
+    # Return the integer gain from a gain setting value
+    #
+    # Arguments:
+    #   gain_setting -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
+    set gain [expr 2**$gain_setting]
+    return $gain
+}
+
+proc anx_se_volts { digitized_counts gain_setting } {
     # Convert a fixed-point single-ended AN1 or AN0 measurement to
     # floating-point volts
     #
     # Arguments:
     #   digitized_counts -- Raw output from the read/query command
-    #   gain -- 1,2,4,8,...,128 gain value
+    #   gain_setting -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
+    set gain [gain_from_setting $gain_setting]
     set voltage [expr (double($digitized_counts) / 65535) * (2.5 / $gain)]
+    return $voltage
+}
+
+proc anx_bipolar_volts { digitized_counts gain_setting } {
+    # Convert a fixed-point bipolar AN1 or AN0 measurement to
+    # floating-point volts
+    #
+    # Arguments:
+    #   digitized_counts -- Raw output from the read/query command
+    #   gain_setting -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
+    set gain [gain_from_setting $gain_setting]
+    set voltage [expr (double($digitized_counts) / 65535 * (5.0 / $gain)) - (2.5 / $gain)]
     return $voltage
 }
 
@@ -211,7 +233,7 @@ proc anx_se_counts { device_index gain_setting } {
     # Arguments:
     #   device_index -- 0, 1, ... , connected ADU100s -1
     #   gain_setting -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
-    set result [tcladu::query 0 "RUN1$gain_setting"]
+    set result [tcladu::query 0 "RBN1$gain_setting"]
     set success_code [lindex $result 0]
     if { $success_code == 0 } {
 	set raw_counts [lindex $result 1]
@@ -256,7 +278,7 @@ if {$params(sn) ne ""} {
     set adu100_index 0
 }
 
-puts -nonewline "Initializing ADU100 0..."
+puts -nonewline "Initializing ADU100 $adu100_index..."
 puts [initialize_adu100 $adu100_index]
 
 set result [tcladu::clear_queue $adu100_index]
@@ -282,14 +304,14 @@ try {
 puts [close_relay $adu100_index]
 # Wait for reading to settle
 after 1000
-set raw_cal_counts [calibrate_input 0 $params(g)]
+set raw_cal_counts [calibrate_input $adu100_index $params(g)]
 set cal_counts [forceInteger $raw_cal_counts]
-set cal_an1_v [anx_se_volts $cal_counts [expr 2**$params(g)]]
+set cal_an1_v [anx_se_volts $cal_counts $params(g)]
 
 foreach reading [iterint 0 10] {
-    set raw_counts [anx_se_counts 0 $params(g)]
+    set raw_counts [anx_se_counts $adu100_index $params(g)]
     set an1_counts [forceInteger $raw_counts]
-    set an1_v [anx_se_volts $an1_counts [expr 2**$params(g)]]
+    set an1_v [anx_bipolar_volts $an1_counts $params(g)]
     set an1_mv [expr 1000 * $an1_v]
     puts "AN1 counts are $an1_counts, [format %0.3f $an1_mv] mV"
     after 1000
