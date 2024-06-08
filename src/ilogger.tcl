@@ -38,6 +38,12 @@ try {
     puts $message
     exit
 }
+
+# Calibration
+source calibration.tcl
+
+source table.tcl
+
 ######################## Command-line parsing ########################
 
 set usage "-- "
@@ -48,6 +54,7 @@ append usage "usage: [file tail $thisfile] \[options\]"
 lappend options [list sn.arg "" "ADU100 serial number (Empty if only one)"]
 lappend options [list g.arg 0 "Analog measurement gain (0, 1, ..., 7)"]
 
+set invocation "tclsh ilogger.tcl $argv"
 try {
     array set params [::cmdline::getoptions argv $options $usage]
 } trap {CMDLINE USAGE} {msg o} {
@@ -170,7 +177,7 @@ proc close_relay { adu100_index } {
 
 proc calibrate_input { adu100_index  gain_setting } {
     # Have the ADU100 perform an auto-calibration on the AN1 analog
-    # input.
+    # input in bipolar mode.
     #
     # Arguments:
     #   adu100_index -- integer index choosing the ADU100
@@ -186,7 +193,7 @@ proc calibrate_input { adu100_index  gain_setting } {
     set success_code [lindex $result 0]
     if {$success_code == 0} {
 	set value [lindex $result 1]
-	puts "Returned value was $value"
+	# puts "Returned value was $value"
 	return $value
     } else {
 	colorputs -newline "Problem calibrating AN1" red
@@ -217,7 +224,10 @@ proc anx_se_volts { digitized_counts gain_setting } {
 
 proc anx_bipolar_volts { digitized_counts gain_setting } {
     # Convert a fixed-point bipolar AN1 or AN0 measurement to
-    # floating-point volts
+    # floating-point volts.
+    #
+    # Bipolar AN1 is just AN1 vs LCOM, which makes sense when both AN1
+    # and LCOM have a positive common-mode voltage.
     #
     # Arguments:
     #   digitized_counts -- Raw output from the read/query command
@@ -245,6 +255,42 @@ proc anx_se_counts { device_index gain_setting } {
     }
 }
 
+proc A_from_V { volts gain_setting cal_dict } {
+    # Return current readings in A given voltage readings
+    #
+    # Arguments:
+    #   volts -- Voltage read from AN1
+    #   gain_setting -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
+    #   cal_dict -- Calibration dictionary
+    set slope_A_per_V [dict get $cal_dict $gain_setting slope_A_per_V]
+    set offset_A [dict get $cal_dict $gain_setting offset_A]
+    set amps [expr $volts * double($slope_A_per_V) + $offset_A]
+    return $amps
+}
+
+
+
+namespace eval dryrun {
+
+    # Dryrun table setup
+
+    # Table column widths
+    variable iteration_width 10
+    variable counts_width 10
+    variable raw_mV_width 10
+    variable cal_mA_width 10
+    
+    
+    # Alternating widths and names for the dryrun table
+    set column_list [list $iteration_width "Read"]
+    lappend column_list [list $counts_width "Counts"]
+    lappend column_list [list $raw_mV_width "Raw (mV)"]
+    lappend column_list [list $cal_mA_width "Cal (mA)"]
+
+
+    
+}
+
 
 ########################## Main entry point ##########################
 
@@ -253,7 +299,7 @@ set output_file_tail "cli_log.dat"
 set output_file_path ${program_directory}/$output_file_tail
 try {
     set fid [open $output_file_path a+]
-    puts $fid "tclsh ilogger.tcl $argv"	
+    puts $fid $invocation
     close $fid
 } trap {} {message optdict} {
     puts $message
@@ -301,19 +347,31 @@ try {
 }
 
 
-puts [close_relay $adu100_index]
+
+
+close_relay $adu100_index
 # Wait for reading to settle
 after 1000
 set raw_cal_counts [calibrate_input $adu100_index $params(g)]
 set cal_counts [forceInteger $raw_cal_counts]
-set cal_an1_v [anx_se_volts $cal_counts $params(g)]
+set cal_an1_V [anx_se_volts $cal_counts $params(g)]
+
+puts [table::header_line $dryrun::column_list]
+puts [table::dashline $dryrun::column_list]
 
 foreach reading [iterint 0 10] {
     set raw_counts [anx_se_counts $adu100_index $params(g)]
     set an1_counts [forceInteger $raw_counts]
-    set an1_v [anx_bipolar_volts $an1_counts $params(g)]
-    set an1_mv [expr 1000 * $an1_v]
-    puts "AN1 counts are $an1_counts, [format %0.3f $an1_mv] mV"
+    set an1_V [anx_bipolar_volts $an1_counts $params(g)]
+    set an1_A [A_from_V $an1_V $params(g) $cal_dict]
+    set an1_mA [expr 1000 * $an1_A]
+    set an1_mV [expr 1000 * $an1_V]
+    set value_list [list $reading \
+			[format %i $an1_counts] \
+			[format %0.3f $an1_mV] \
+			[format %0.3f $an1_mA]]
+    puts [table::table_row $value_list $dryrun::column_list]
+    # puts "AN1 counts are $an1_counts, [format %0.3f $an1_mV] mV, [format %0.3f $an1_mA] mA"
     after 1000
 }
 
