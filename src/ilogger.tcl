@@ -237,13 +237,33 @@ proc anx_bipolar_volts { digitized_counts gain_setting } {
     return $voltage
 }
 
-proc anx_se_counts { device_index gain_setting } {
-    # Return raw counts from the AN1 input
+proc an1_bipolar_counts { device_index gain_setting } {
+    # Return raw counts from the AN1 input in bipolar mode
     #
+    # Bipolar AN1 is just AN1 vs LCOM, which makes sense when both AN1
+    # and LCOM have a positive common-mode voltage.
     # Arguments:
     #   device_index -- 0, 1, ... , connected ADU100s -1
     #   gain_setting -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
     set result [tcladu::query 0 "RBN1$gain_setting"]
+    set success_code [lindex $result 0]
+    if { $success_code == 0 } {
+	set raw_counts [lindex $result 1]
+	# These counts will be padded with leading zeros.  We need to remove them.
+	set counts [forceInteger $raw_counts]
+	return $counts
+    } else {
+	return error -errorinfo "Problem querying device $device_index"
+    }
+}
+
+proc an2_unipolar_counts { device_index gain_setting } {
+    # Return raw counts from the AN2 input (always unipolar)
+    #
+    # Arguments:
+    #   device_index -- 0, 1, ... , connected ADU100s -1
+    #   gain_setting -- 1 (10V max) or 2 (5V max)
+    set result [tcladu::query 0 "RUN2$gain_setting"]
     set success_code [lindex $result 0]
     if { $success_code == 0 } {
 	set raw_counts [lindex $result 1]
@@ -356,11 +376,12 @@ set raw_cal_counts [calibrate_input $adu100_index $params(g)]
 set cal_counts [forceInteger $raw_cal_counts]
 set cal_an1_V [anx_se_volts $cal_counts $params(g)]
 
+# Start the dry run
 puts [table::header_line $dryrun::column_list]
 puts [table::dashline $dryrun::column_list]
 
 foreach reading [iterint 0 10] {
-    set raw_counts [anx_se_counts $adu100_index $params(g)]
+    set raw_counts [an1_bipolar_counts $adu100_index $params(g)]
     set an1_counts [forceInteger $raw_counts]
     set an1_V [anx_bipolar_volts $an1_counts $params(g)]
     set an1_A [A_from_V $an1_V $params(g) $cal_dict]
