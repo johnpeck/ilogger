@@ -175,7 +175,7 @@ proc close_relay { adu100_index } {
     }
 }
 
-proc calibrate_input { adu100_index  gain_setting } {
+proc calibrate_an1 { adu100_index  gain_setting } {
     # Have the ADU100 perform an auto-calibration on the AN1 analog
     # input in bipolar mode.
     #
@@ -190,6 +190,32 @@ proc calibrate_input { adu100_index  gain_setting } {
     }
     # Calibrate input 1 with a gain of gain_setting
     set result [tcladu::query $adu100_index "RBC1$gain_setting"]
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	set value [lindex $result 1]
+	# puts "Returned value was $value"
+	return $value
+    } else {
+	colorputs -newline "Problem calibrating AN1" red
+	exit
+    }
+}
+
+proc calibrate_an2 { adu100_index  gain_setting } {
+    # Have the ADU100 perform an auto-calibration on the AN2 analog
+    # input in unipolar mode.
+    #
+    # Arguments:
+    #   adu100_index -- integer index choosing the ADU100
+    #   gain_setting -- 1 (10V max) or 2 (5V max)
+
+    if { $gain_setting <= 2 && $gain_setting >= 1 } {
+	# This is fine
+    } else {
+	set gain_setting 1
+    }
+    # Calibrate AN2 with a gain of gain_setting
+    set result [tcladu::query $adu100_index "RUC2$gain_setting"]
     set success_code [lindex $result 0]
     if {$success_code == 0} {
 	set value [lindex $result 1]
@@ -275,6 +301,23 @@ proc an2_unipolar_counts { device_index gain_setting } {
     }
 }
 
+proc an2_unipolar_volts { digitized_counts gain_setting } {
+    # Convert a fixed-point bipolar AN2 measurement to floating-point
+    # volts.
+    #
+    # Unipolar AN2 can run up to 10V with a gain setting of 1.
+    #
+    # Arguments:
+    #   digitized_counts -- Raw output from the read/query command
+    #   gain_setting -- 1 (10V max) or 2 (5V max)
+
+    # The gain for AN2 is different than it is for other analog
+    # inputs, it's just the gain setting.
+    set gain $gain_setting
+    set voltage [expr (double($digitized_counts) / 65535) * (10.0 / $gain)]
+    return $voltage
+}
+
 proc A_from_V { volts gain_setting cal_dict } {
     # Return current readings in A given voltage readings
     #
@@ -292,7 +335,7 @@ proc A_from_V { volts gain_setting cal_dict } {
 
 namespace eval dryrun {
 
-    # Dryrun table setup
+    # Configure the dry run table
 
     # Table column widths
     variable iteration_width 10
@@ -303,9 +346,11 @@ namespace eval dryrun {
     
     # Alternating widths and names for the dryrun table
     set column_list [list $iteration_width "Read"]
-    lappend column_list [list $counts_width "Counts"]
+    lappend column_list [list $counts_width "AN1 Counts"]
     lappend column_list [list $raw_mV_width "Raw (mV)"]
     lappend column_list [list $cal_mA_width "Cal (mA)"]
+    lappend column_list [list $counts_width "AN2 Counts"]
+    lappend column_list [list $cal_mA_width "AN2 (V)"]
 
 
     
@@ -372,25 +417,31 @@ try {
 close_relay $adu100_index
 # Wait for reading to settle
 after 1000
-set raw_cal_counts [calibrate_input $adu100_index $params(g)]
+set raw_cal_counts [calibrate_an1 $adu100_index $params(g)]
 set cal_counts [forceInteger $raw_cal_counts]
 set cal_an1_V [anx_se_volts $cal_counts $params(g)]
+
+set raw_cal_counts [calibrate_an2 $adu100_index 1]
 
 # Start the dry run
 puts [table::header_line $dryrun::column_list]
 puts [table::dashline $dryrun::column_list]
 
 foreach reading [iterint 0 10] {
-    set raw_counts [an1_bipolar_counts $adu100_index $params(g)]
-    set an1_counts [forceInteger $raw_counts]
+    set an1_counts [an1_bipolar_counts $adu100_index $params(g)]
     set an1_V [anx_bipolar_volts $an1_counts $params(g)]
     set an1_A [A_from_V $an1_V $params(g) $cal_dict]
     set an1_mA [expr 1000 * $an1_A]
     set an1_mV [expr 1000 * $an1_V]
+
+    set an2_counts [an2_unipolar_counts $adu100_index 1]
+    set an2_V [an2_unipolar_volts $an2_counts 1]
     set value_list [list $reading \
 			[format %i $an1_counts] \
 			[format %0.3f $an1_mV] \
-			[format %0.3f $an1_mA]]
+			[format %0.3f $an1_mA] \
+			[format %i $an2_counts] \
+			[format %0.3f $an2_V]]
     puts [table::table_row $value_list $dryrun::column_list]
     # puts "AN1 counts are $an1_counts, [format %0.3f $an1_mV] mV, [format %0.3f $an1_mA] mA"
     after 1000
