@@ -133,50 +133,6 @@ proc colorputs {newline text color} {
 
 }
 
-proc initialize_adu100 { adu100_index } {
-    # Claim interface 0 on the ADU100
-    #
-    # Arguments:
-    #  adu100_index -- integer index choosing the ADU100
-    set result [tcladu::initialize_device $adu100_index]
-    if { $result == 0 } {
-	return ok
-    } else {
-	colorputs -newline "Failed to initialize ADU100 $adu100_index, return value $result" red
-	exit
-    }
-}
-
-proc open_relay { adu100_index } {
-    # Open the relay
-    #
-    # Arguments:
-    #   adu100_index -- integer index choosing the ADU100
-    set result [tcladu::send_command $adu100_index "RK0"]
-    set success_code [lindex $result 0]
-    if {$success_code == 0} {
-	return ok
-    } else {
-	colorputs -newline "Problem openning the relay" red
-	exit
-    }
-}
-
-proc close_relay { adu100_index } {
-    # Close the relay
-    #
-    # Arguments:
-    #   adu100_index -- integer index choosing the ADU100
-    set result [tcladu::send_command $adu100_index "SK0"]
-    set success_code [lindex $result 0]
-    if {$success_code == 0} {
-	return ok
-    } else {
-	colorputs -newline "Problem closing the relay" red
-	exit
-    }
-}
-
 proc calibrate_an1 { adu100_index  gain_setting } {
     # Have the ADU100 perform an auto-calibration on the AN1 analog
     # input in bipolar mode.
@@ -228,6 +184,55 @@ proc calibrate_an2 { adu100_index  gain_setting } {
 	exit
     }
 }
+
+proc initialize_adu100 { adu100_index an1_gain an2_gain } {
+    # Claim interface 0 on the ADU100
+    #
+    # Arguments:
+    #  adu100_index -- integer index choosing the ADU100
+    set result [tcladu::initialize_device $adu100_index]
+    if { $result == 0 } {
+	return ok
+    } else {
+	colorputs -newline "Failed to initialize ADU100 $adu100_index, return value $result" red
+	exit
+    }
+    # The analog inputs need to be calibrated in case the gain setting has changed.
+    calibrate_an1 $adu100_index $an1_gain
+    calibrate_an2 $adu100_index $an2_gain
+}
+
+proc open_relay { adu100_index } {
+    # Open the relay
+    #
+    # Arguments:
+    #   adu100_index -- integer index choosing the ADU100
+    set result [tcladu::send_command $adu100_index "RK0"]
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	return ok
+    } else {
+	colorputs -newline "Problem openning the relay" red
+	exit
+    }
+}
+
+proc close_relay { adu100_index } {
+    # Close the relay
+    #
+    # Arguments:
+    #   adu100_index -- integer index choosing the ADU100
+    set result [tcladu::send_command $adu100_index "SK0"]
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	return ok
+    } else {
+	colorputs -newline "Problem closing the relay" red
+	exit
+    }
+}
+
+
 
 proc gain_from_setting { gain_setting } {
     # Return the integer gain from a gain setting value
@@ -386,7 +391,7 @@ if {$params(sn) ne ""} {
 }
 
 puts -nonewline "Initializing ADU100 $adu100_index..."
-puts [initialize_adu100 $adu100_index]
+puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
 set result [tcladu::clear_queue $adu100_index]
 if { [lindex $result 0] == 0 } {
@@ -408,11 +413,7 @@ try {
 close_relay $adu100_index
 # Wait for reading to settle
 after 1000
-set raw_cal_counts [calibrate_an1 $adu100_index $params(g)]
-set cal_counts [forceInteger $raw_cal_counts]
-set cal_an1_V [anx_se_volts $cal_counts $params(g)]
 
-set raw_cal_counts [calibrate_an2 $adu100_index $config::an2_gain]
 
 # Start the dry run
 puts [table::header_line $dryrun::column_list]
