@@ -44,6 +44,8 @@ source calibration.tcl
 
 source table.tcl
 
+source config.tcl
+
 ######################## Command-line parsing ########################
 
 set usage "-- "
@@ -80,7 +82,7 @@ proc forceInteger { x } {
     # https://stackoverflow.com/questions/2110864/handling-numbers-with-leading-zeros-in-tcl
     set count [scan $x %d%s n rest]
     if { $count <= 0 || ( $count == 2 && ![string is space $rest] ) } {
-        return -code error "not an integer: \"$x\""
+        return -code error "Not an integer: \"$x\""
     }
     return $n
 }
@@ -331,8 +333,6 @@ proc A_from_V { volts gain_setting cal_dict } {
     return $amps
 }
 
-
-
 namespace eval dryrun {
 
     # Configure the dry run table
@@ -342,8 +342,7 @@ namespace eval dryrun {
     variable counts_width 10
     variable raw_mV_width 10
     variable cal_mA_width 10
-    
-    
+
     # Alternating widths and names for the dryrun table
     set column_list [list $iteration_width "Read"]
     lappend column_list [list $counts_width "AN1 Counts"]
@@ -352,10 +351,7 @@ namespace eval dryrun {
     lappend column_list [list $counts_width "AN2 Counts"]
     lappend column_list [list $cal_mA_width "AN2 (V)"]
 
-
-    
 }
-
 
 ########################## Main entry point ##########################
 
@@ -400,8 +396,6 @@ if { [lindex $result 0] == 0 } {
     exit
 }
 
-
-
 # Open the datafile
 set datafile "ilogger.dat"
 try {
@@ -411,9 +405,6 @@ try {
     exit
 }
 
-
-
-
 close_relay $adu100_index
 # Wait for reading to settle
 after 1000
@@ -421,7 +412,7 @@ set raw_cal_counts [calibrate_an1 $adu100_index $params(g)]
 set cal_counts [forceInteger $raw_cal_counts]
 set cal_an1_V [anx_se_volts $cal_counts $params(g)]
 
-set raw_cal_counts [calibrate_an2 $adu100_index 1]
+set raw_cal_counts [calibrate_an2 $adu100_index $config::an2_gain]
 
 # Start the dry run
 puts [table::header_line $dryrun::column_list]
@@ -434,8 +425,8 @@ foreach reading [iterint 0 10] {
     set an1_mA [expr 1000 * $an1_A]
     set an1_mV [expr 1000 * $an1_V]
 
-    set an2_counts [an2_unipolar_counts $adu100_index 1]
-    set an2_V [an2_unipolar_volts $an2_counts 1]
+    set an2_counts [an2_unipolar_counts $adu100_index $config::an2_gain]
+    set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]
     set value_list [list $reading \
 			[format %i $an1_counts] \
 			[format %0.3f $an1_mV] \
@@ -446,8 +437,6 @@ foreach reading [iterint 0 10] {
     # puts "AN1 counts are $an1_counts, [format %0.3f $an1_mV] mV, [format %0.3f $an1_mA] mA"
     after 1000
 }
-
-
 
 after 1000 [open_relay $adu100_index]
 
@@ -461,7 +450,6 @@ puts ""
 puts "Press q<enter> to stop logging"
 
 after 1
-
 
 puts $fid "# Time (s), Current (A)"
 
