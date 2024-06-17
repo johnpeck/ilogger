@@ -332,10 +332,28 @@ proc A_from_V { volts gain_setting cal_dict } {
     #   volts -- Voltage read from AN1
     #   gain_setting -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
     #   cal_dict -- Calibration dictionary
-    set slope_A_per_V [dict get $cal_dict $gain_setting slope_A_per_V]
-    set offset_A [dict get $cal_dict $gain_setting offset_A]
+    set slope_A_per_V [dict get $calibration::cal_dict $gain_setting slope_A_per_V]
+    set offset_A [dict get $calibration::cal_dict $gain_setting offset_A]
     set amps [expr $volts * double($slope_A_per_V) + $offset_A]
     return $amps
+}
+
+proc current_A { adu100_index gain_setting } {
+    # Return the current measurement in Amps
+    #
+    # Arguments:
+    #   adu100_index -- integer index choosing the ADU100
+    #   gain_setting -- Gain setting 0-7 with 0 being the minimum gain (0 - 2.5V range)
+
+    # Make the AN1 reading
+    set an1_counts [an1_bipolar_counts $adu100_index $gain_setting]
+
+    # Convert AN1 counts to volts
+    set an1_V [anx_bipolar_volts $an1_counts $gain_setting]
+
+    # Convert voltage to current using the calibration dictionary
+    set an1_A [A_from_V $an1_V $gain_setting $calibration::cal_dict]
+    return $an1_A
 }
 
 namespace eval dryrun {
@@ -422,7 +440,7 @@ puts [table::dashline $dryrun::column_list]
 foreach reading [iterint 0 10] {
     set an1_counts [an1_bipolar_counts $adu100_index $params(g)]
     set an1_V [anx_bipolar_volts $an1_counts $params(g)]
-    set an1_A [A_from_V $an1_V $params(g) $cal_dict]
+    set an1_A [A_from_V $an1_V $params(g) $calibration::cal_dict]
     set an1_mA [expr 1000 * $an1_A]
     set an1_mV [expr 1000 * $an1_V]
 
@@ -436,6 +454,7 @@ foreach reading [iterint 0 10] {
 			[format %0.3f $an2_V]]
     puts [table::table_row $value_list $dryrun::column_list]
     # puts "AN1 counts are $an1_counts, [format %0.3f $an1_mV] mV, [format %0.3f $an1_mA] mA"
+    # puts "Current is [format %0.3f [expr 1000 * [current_A $adu100_index $params(g)]]] mA"
     after 1000
 }
 
