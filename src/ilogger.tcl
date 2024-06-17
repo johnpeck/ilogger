@@ -458,16 +458,15 @@ foreach reading [iterint 0 10] {
     after 1000
 }
 
-after 1000 [open_relay $adu100_index]
 
-close $fid
-exit
-
-puts "Connected to ADU100 $adu100_index"
 puts ""
 puts "Logging to $datafile"
 puts ""
 puts "Press q<enter> to stop logging"
+
+# Allow keyboard input during data collection.  We need to use the
+# keyboard to stop collection.
+chan configure stdin -blocking 0 -buffering none
 
 after 1
 
@@ -483,17 +482,16 @@ while true {
     set time_delta_s [expr $time_now_s - $time_offset_s]
 
     set time_stamp [format %0.3f $time_delta_s]
-    send_command $vi ":measure:current:dc?"
-    set result [gets $vi]
-    puts "Current at $time_stamp is $result"
-    puts $fid "$time_stamp, $result"
+    set current_A [current_A $adu100_index $params(g)]
+    puts "Current at $time_stamp s is [format %0.3f [expr 1000 * $current_A]] mA"
+    puts $fid "$time_stamp, [format %0.3e $current_A]"
     set keypress [string trim [read stdin 1]]
     if {$keypress eq "q"} {
 	break
     }
 }
 
+after 1000 [open_relay $adu100_index]
+
 # close channels
-close $vi
-close $rm
 close $fid
