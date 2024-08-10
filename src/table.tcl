@@ -31,6 +31,9 @@ namespace eval table {
 	# Arguments
 	#   column_list -- List of alternating width and titles
 	foreach {width title} [join $column_list] {
+	    # - means left justify
+	    # * means the next argument must be an integer field width
+	    # s means no conversion
 	    append fstring "%-*s "
 	}
 	return $fstring

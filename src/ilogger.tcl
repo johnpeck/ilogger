@@ -39,10 +39,32 @@ try {
     exit
 }
 
+# Datafile metadata from inifile
+#
+# inifile comes from tcllib
+try {
+    set version [package require inifile]
+    puts "Loaded inifile version $version"
+    ini::commentchar "#"
+} trap {} {message optdict} {
+    puts "Error requiring inifile"
+    puts $message
+    exit
+}
+
+
+# Logtable for tabular console logging
+try {
+    set version [package require logtable]
+    puts "Loaded logtable version $version"
+} trap {} {message optdict} {
+    puts "Error requiring logtable"
+    puts $message
+    exit
+}
+
 # Calibration
 source calibration.tcl
-
-source table.tcl
 
 source config.tcl
 
@@ -133,6 +155,18 @@ proc colorputs {newline text color} {
 
 }
 
+proc textable_column_titles { column_list } {
+    # Return a comma-separated list of column titles
+    #
+    # Arguments:
+    #   column_list -- List of alternating column widths and titles
+    foreach { width title } $column_list {
+	lappend title_list $title
+    }
+    set csv_list [join $title_list ", "]
+    return $csv_list
+}
+
 proc calibrate_an1 { adu100_index  gain_setting } {
     # Have the ADU100 perform an auto-calibration on the AN1 analog
     # input in bipolar mode.
@@ -180,7 +214,7 @@ proc calibrate_an2 { adu100_index  gain_setting } {
 	# puts "Returned value was $value"
 	return $value
     } else {
-	colorputs -newline "Problem calibrating AN1" red
+	colorputs -newline "Problem calibrating AN2" red
 	exit
     }
 }
@@ -191,15 +225,14 @@ proc initialize_adu100 { adu100_index an1_gain an2_gain } {
     # Arguments:
     #  adu100_index -- integer index choosing the ADU100
     set result [tcladu::initialize_device $adu100_index]
-    if { $result == 0 } {
-	return ok
-    } else {
+    if { $result != 0 } {
 	colorputs -newline "Failed to initialize ADU100 $adu100_index, return value $result" red
 	exit
     }
     # The analog inputs need to be calibrated in case the gain setting has changed.
     calibrate_an1 $adu100_index $an1_gain
     calibrate_an2 $adu100_index $an2_gain
+    return ok
 }
 
 proc open_relay { adu100_index } {
@@ -231,8 +264,6 @@ proc close_relay { adu100_index } {
 	exit
     }
 }
-
-
 
 proc gain_from_setting { gain_setting } {
     # Return the integer gain from a gain setting value
@@ -356,25 +387,66 @@ proc current_A { adu100_index gain_setting } {
     return $an1_A
 }
 
-namespace eval dryrun {
+proc initialize_datafile {} {
+    # Initialize the datafile and return a file pointer
+    set datafile "ilogger.dat"
+    try {
+	set fid [open $datafile w+]
+    } trap {} {message optdict} {
+	puts $message
+	exit
+    }
+    puts $fid "\[about\]"
+    puts $fid ""
+    puts $fid "# The title for the data to appear in the plot key"
+    puts $fid "title=some crap"
+    puts $fid ""
+    puts $fid "# No more keys below the data section"
+    puts $fid "\[data\]"
+    puts $fid ""
+    return $fid
+}
 
+namespace eval dryrun {
     # Configure the dry run table
 
     # Table column widths
     variable iteration_width 10
-    variable counts_width 10
-    variable raw_mV_width 10
-    variable cal_mA_width 10
+    variable counts_width 15
+    variable raw_voltage_width 15
+    variable cal_mA_width 15
 
     # Alternating widths and names for the dryrun table
-    set column_list [list $iteration_width "Read"]
+    set column_list [list]
+    lappend column_list [list $iteration_width "Read"]
     lappend column_list [list $counts_width "AN1 Counts"]
-    lappend column_list [list $raw_mV_width "Raw (mV)"]
-    lappend column_list [list $cal_mA_width "Cal (mA)"]
+    lappend column_list [list $raw_voltage_width "Raw"]
+    lappend column_list [list $cal_mA_width "Current"]
     lappend column_list [list $counts_width "AN2 Counts"]
-    lappend column_list [list $cal_mA_width "AN2 (V)"]
-
+    lappend column_list [list $raw_voltage_width "Voltage"]
 }
+
+namespace eval mainrun {
+    # Configure the main run table
+
+    # Table column widths
+    variable time_width 10
+    variable an1_counts_width 15
+    variable an1_voltage_width 15
+    variable cal_current_width 15
+    variable an2_counts_width 15
+    variable cal_voltage_width 15
+
+    # Alternating widths and names for the mainrun table
+    set column_list [list]
+    lappend column_list [list $time_width "Time (s)"]
+    lappend column_list [list $an1_counts_width "AN1 Counts"]
+    lappend column_list [list $an1_voltage_width "Raw"]
+    lappend column_list [list $cal_current_width "Current"]
+    lappend column_list [list $an2_counts_width "AN2 Counts"]
+    lappend column_list [list $cal_voltage_width "Voltage"]
+}
+
 
 ########################## Main entry point ##########################
 
@@ -420,24 +492,25 @@ if { [lindex $result 0] == 0 } {
 }
 
 # Open the datafile
-set datafile "ilogger.dat"
-try {
-    set fid [open $datafile w+]
-} trap {} {message optdict} {
-    puts $message
-    exit
-}
+# set datafile "ilogger.dat"
+# try {
+#     set fid [open $datafile w+]
+# } trap {} {message optdict} {
+#     puts $message
+#     exit
+# }
+
+set fid [initialize_datafile]
 
 close_relay $adu100_index
 # Wait for reading to settle
 after 1000
 
-
 # Start the dry run
-puts [table::header_line $dryrun::column_list]
-puts [table::dashline $dryrun::column_list]
+puts [logtable::header_line -collist $dryrun::column_list]
+puts [logtable::dashline -collist $dryrun::column_list]
 
-foreach reading [iterint 0 10] {
+foreach reading [logtable::intlist -first 0 -length 10] {
     set an1_counts [an1_bipolar_counts $adu100_index $params(g)]
     set an1_V [anx_bipolar_volts $an1_counts $params(g)]
     set an1_A [A_from_V $an1_V $params(g) $calibration::cal_dict]
@@ -448,19 +521,16 @@ foreach reading [iterint 0 10] {
     set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]
     set value_list [list $reading \
 			[format %i $an1_counts] \
-			[format %0.3f $an1_mV] \
-			[format %0.3f $an1_mA] \
+			"[logtable::engineering_notation -number $an1_V -digits 3]V" \
+			"[logtable::engineering_notation -number $an1_A -digits 3]A" \
 			[format %i $an2_counts] \
-			[format %0.3f $an2_V]]
-    puts [table::table_row $value_list $dryrun::column_list]
-    # puts "AN1 counts are $an1_counts, [format %0.3f $an1_mV] mV, [format %0.3f $an1_mA] mA"
-    # puts "Current is [format %0.3f [expr 1000 * [current_A $adu100_index $params(g)]]] mA"
+			"[logtable::engineering_notation -number $an2_V -digits 3]V"]
+    puts [logtable::table_row -collist $dryrun::column_list -vallist $value_list]
     after 1000
 }
 
 
-puts ""
-puts "Logging to $datafile"
+
 puts ""
 puts "Press q<enter> to stop logging"
 
@@ -470,21 +540,52 @@ chan configure stdin -blocking 0 -buffering none
 
 after 1
 
-puts $fid "# Time (s), Current (A)"
+puts $fid "# Time (s), Voltage (V), Current (A)"
 
 set time_offset_s [clock seconds]
 
+# Start the main run
+puts [logtable::header_line -collist $mainrun::column_list]
+puts [logtable::dashline -collist $mainrun::column_list]
+
+
+set count 0
 while true {
+    if { $count > 10 } {
+	# Output another header line and reset the counter
+	puts ""
+	puts [logtable::header_line -collist $mainrun::column_list]
+	puts [logtable::dashline -collist $mainrun::column_list]
+	set count 0
+    } else {
+	incr count
+    }
     set time_now_ms [clock milliseconds]
     set time_now_s [expr double($time_now_ms)/1000]
     # time_delta_s is a millisecond-resolution stopwatch started at
     # script execution.  The number is in floating-point seconds.
     set time_delta_s [expr $time_now_s - $time_offset_s]
 
-    set time_stamp [format %0.3f $time_delta_s]
-    set current_A [current_A $adu100_index $params(g)]
-    puts "Current at $time_stamp s is [format %0.3f [expr 1000 * $current_A]] mA"
-    puts $fid "$time_stamp, [format %0.3e $current_A]"
+    set time_stamp_s [format %0.3f $time_delta_s]
+
+    # Collect data
+    set an1_N [an1_bipolar_counts $adu100_index $params(g)]
+    set an1_V [anx_bipolar_volts $an1_N $params(g)]
+    set an1_A [A_from_V $an1_V $params(g) $calibration::cal_dict]
+
+    set an2_N [an2_unipolar_counts $adu100_index $config::an2_gain]
+    set an2_V [an2_unipolar_volts $an2_N $config::an2_gain]
+
+    # Print to real-time log
+    set value_list [list $time_stamp_s \
+			[format %i $an1_N] \
+			"[logtable::engineering_notation -number $an1_V -digits 3]V" \
+			"[logtable::engineering_notation -number $an1_A -digits 3]A" \
+			[format %i $an2_N] \
+			"[logtable::engineering_notation -number $an2_V -digits 3]V"]
+    puts [logtable::table_row -collist $mainrun::column_list -vallist $value_list]
+
+    puts $fid "$time_stamp_s, [format %0.3e $an2_V], [format %0.3e $an1_A]"
     set keypress [string trim [read stdin 1]]
     if {$keypress eq "q"} {
 	break
