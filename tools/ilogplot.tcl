@@ -54,6 +54,16 @@ try {
     exit
 }
 
+# Generate gnuplot code
+try {
+    set version [package require tclgnuplot]
+    puts "Loaded tclgnuplot version $version"
+} trap {} {message optdict} {
+    puts "Error requiring tclgnuplot"
+    puts $message
+    exit
+}
+
 ############################# Constants ##############################
 
 namespace eval constants {
@@ -71,19 +81,17 @@ lappend options {t.arg "Current draw" "Overall plot title"}
 # Padding -- makes room for current labels at the beginning of the plot
 lappend options {p.arg "0" "Padding at beginning of plot (s)"}
 
-# Current reference lines
-lappend options {cr1.arg "" "Current reference line 1"}
-lappend options {cr2.arg "" "Current reference line 2"}
-
 # Voltage references
 foreach reference [logtable::intlist -first 1  -length 5] {
-    lappend options [list vr${reference}.arg "" "Voltage reference $reference"]
+    lappend options [list vr${reference}.arg "" "Voltage reference $reference (volts)"]
 }
 
 # Current references
 foreach reference [logtable::intlist -first 1 -length 5] {
-    lappend options [list ir${reference}.arg "" "Current reference $reference"]
+    lappend options [list ir${reference}.arg "" "Current reference $reference (amps)"]
 }
+
+set invocation "tclsh ilogplot.tcl $argv"
 
 try {
     array set params [::cmdline::getoptions argv $options $usage]
@@ -173,7 +181,7 @@ proc read_file {filename datafile_dict_list} {
 
     puts "Found sections: [ini::sections $fp]"
 
-    puts "Comment character is [ini::commentchar]"
+    # puts "Comment character is [ini::commentchar]"
 
     puts "Found keys: [ini::keys $fp about] in the about section"
 
@@ -289,7 +297,7 @@ proc write_gnuplot_data {datafile_dict_list} {
 	    set data [dict get $datafile_dict file_data]
 	    dict set dummy_dict file_data $data
 	    set points [llength $data]
-	    puts "Found points: $points"
+	    # puts "Found points: $points"
 	} trap {} {message optdict} {
 	    puts $message
 	    puts "Did not find a title"
@@ -304,7 +312,8 @@ proc write_gnuplot_data {datafile_dict_list} {
     set datafile_dict_list $dummy_dict_list
 
     foreach dataset_dict $datafile_dict_list {
-	logtable::print_dictionary $dataset_dict
+	# Debug -- print the datafile dictionary
+	# logtable::print_dictionary $dataset_dict
     }
 
     foreach datafile_dict $datafile_dict_list {
@@ -390,8 +399,7 @@ proc write_gnuplot_script {annotation_dict datafile_dict_list} {
     set x_axis_column 1
 
     puts $fp "set xrange \[*:*\]"
-    puts $fp "set format x '%0.0s %c'"
-    puts $fp "set logscale x"
+    puts $fp "set format x '%0.2g'"
     puts $fp "set grid mxtics xtics mytics ytics"
 
     # Configure time formatting
@@ -406,7 +414,7 @@ proc write_gnuplot_script {annotation_dict datafile_dict_list} {
 
     puts $fp "set format y '%0.0s %c'"
     puts $fp "set yrange \[*:*\]"
-    puts $fp "set logscale y"
+    # puts $fp "set logscale y"
     # puts $fp "set yrange \[3.5:4.5]"
 
     # Start plotting!
@@ -420,7 +428,7 @@ proc write_gnuplot_script {annotation_dict datafile_dict_list} {
 	    incr linetype
 	}
 	set gnuplot_data_file [dict get $datafile_dict gnuplot_data_file]
-	set title [dict get $datafile_dict title]
+	set title "[dict get $datafile_dict title] current"
 	append output_string "'$gnuplot_data_file' \\\n"
 	append output_string "using $x_axis_column:$y1_axis_column \\\n"
 	append output_string "with lines linetype $linetype linewidth 1 \\\n"
@@ -428,29 +436,30 @@ proc write_gnuplot_script {annotation_dict datafile_dict_list} {
 	append output_string "title '$title' noenhanced, \\\n"
     }
 
-    # foreach entry $column_list {
-    # 	set column [lindex $entry 0]
-    # 	set title [lindex $entry 1]
-    # 	incr linetype
-    # 	while {[lsearch {3 4 5} $linetype] != -1} {
-    # 	    # Avoid these linetypes
-    # 	    incr linetype
-    # 	}
-    # 	# Apply line continuations and newlines to make the script prettier
-    # 	append output_string "'$gnuplot_data_file' \\\n"
-    # 	append output_string "using $x_axis_column:$column \\\n"
-    # 	append output_string "with lines linetype $linetype linewidth 1 \\\n"
-    # 	append output_string "axes x1y1 \\\n"
-    #
-    # 	# Use noenhanced for title to prevent underscores from becoming subscripts
-    # 	append output_string "title '$title' noenhanced, \\\n"
-    # }
 
     ######################### Second y axis ##########################
-    # set column_list [list]
 
-    # Add the second y-axis plot if you want
-    # lappend column_list [list 4 "Charge current"]
+    # Which column contains y2 data (first column is 1)?
+    set y2_axis_column 2
+
+    puts $fp "set format y2 '%0.3g'"
+    puts $fp "set y2range \[*:*\]"
+
+    foreach datafile_dict $datafile_dict_list {
+	incr linetype
+	while {[lsearch {3 4 5} $linetype] != -1} {
+	    # Avoid these linetypes
+	    incr linetype
+	}
+	set gnuplot_data_file [dict get $datafile_dict gnuplot_data_file]
+	set title "[dict get $datafile_dict title] voltage"
+	append output_string "'$gnuplot_data_file' \\\n"
+	append output_string "using $x_axis_column:$y2_axis_column \\\n"
+	append output_string "with lines linetype $linetype linewidth 1 \\\n"
+	append output_string "axes x1y2 \\\n"
+	append output_string "title '$title' noenhanced, \\\n"
+    }
+
 
     # puts $fp "set format y2 '%0.0s %c'"
     # puts $fp "set y2range \[0:20\]"
@@ -657,6 +666,19 @@ proc pause {{message "Hit Enter to continue ==> "}} {
 
 ########################## Main entry point ##########################
 
+# Record the invocation
+set output_file_tail "cli_log.dat"
+set output_file_path ${program_directory}/$output_file_tail
+try {
+    set fid [open $output_file_path a+]
+    set timestamp [clock format [clock seconds] -format {<%d-%b-%Y %H:%M>}]
+    puts $fid "$timestamp $invocation"
+    close $fid
+} trap {} {message optdict} {
+    puts $message
+    exit
+}
+
 foreach name $input_file_name_list {
     # Filenames might come in as relative paths.  We need to give those a full path
     lappend input_file_path_list ${invoked_directory}/$name
@@ -673,7 +695,8 @@ foreach datafile $input_file_path_list {
 }
 
 foreach datafile_dict $datafile_dict_list {
-    logtable::print_dictionary $datafile_dict
+    # Debug -- print the datafile dictionary
+    # logtable::print_dictionary $datafile_dict
 }
 
 # Title is a special key for the plot title
@@ -701,7 +724,7 @@ dict set annotation_dict $key value ""
 dict set annotation_dict $key units "A"
 
 set key y2label
-dict set annotation_dict $key title ""
+dict set annotation_dict $key title "Output voltage"
 dict set annotation_dict $key value ""
 dict set annotation_dict $key units "V"
 dict set annotation_dict $key enhanced true

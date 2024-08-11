@@ -455,7 +455,8 @@ set output_file_tail "cli_log.dat"
 set output_file_path ${program_directory}/$output_file_tail
 try {
     set fid [open $output_file_path a+]
-    puts $fid $invocation
+    set timestamp [clock format [clock seconds] -format {<%d-%b-%Y %H:%M>}]
+    puts $fid "$timestamp $invocation"
     close $fid
 } trap {} {message optdict} {
     puts $message
