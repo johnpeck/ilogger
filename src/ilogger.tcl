@@ -19,7 +19,7 @@ set invoked_directory [pwd]
 
 # Load tcladu
 try {
-    set version [package require -exact tcladu 1.1.3.4]
+    set version [package require -exact tcladu 1.1.3]
     puts "Loaded tcladu version $version"
 } trap {} {message optdict} {
     puts "Error requiring tcladu"
@@ -232,6 +232,24 @@ proc initialize_adu100 { adu100_index an1_gain an2_gain } {
     # The analog inputs need to be calibrated in case the gain setting has changed.
     calibrate_an1 $adu100_index $an1_gain
     calibrate_an2 $adu100_index $an2_gain
+
+    # Configure digital outputs
+    # CPAxxxx -- Configure data direction of PORT A ( x= 1 for input, 0 for output ) ( order is MSB-LSB )
+    # P1      -- Enables light pull-ups on I/O all lines configured as inputs.
+
+    # PA3 -- Input (spare)
+    # PA2 -- Output initialized low for the LED
+    # PA1 -- Input pulled up for calibration relay sensing
+    # PA0 -- Output initialized low for calibration relay control
+    set result [tcladu::send_command $adu100_index "CPA1010"]
+    set result [tcladu::send_command $adu100_index "P1"]
+    set success_code [lindex $result 0]
+    if { $success_code != 0 } {
+	set error_string "Failed to initialize ADU100 $adu100_index digital ports, "
+	append error_string "return value was $success_code"
+	colorputs -newline $error_string red
+	exit
+    }
     return ok
 }
 
