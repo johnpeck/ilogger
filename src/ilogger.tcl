@@ -283,6 +283,33 @@ proc close_relay { adu100_index } {
     }
 }
 
+proc status_led {args} {
+    # Turn the status LED on or off
+    #
+    # Arguments:
+    #   adu100_index -- Which ADU100 to use
+    #   setting -- on or off
+    set myoptions {
+	{adu100_index.arg 0 "ADU100 index"}
+	{setting.arg "off" "On or off"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions]
+
+    if {$arg(setting) eq "on"} {
+	set result [tcladu::send_command $arg(adu100_index) "SA2"]
+    } else {
+	set result [tcladu::send_command $arg(adu100_index) "RA2"]
+    }
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	return ok
+    } else {
+	colorputs -newline "Problem setting the status LED" red
+	exit
+    }
+
+}
+
 proc gain_from_setting { gain_setting } {
     # Return the integer gain from a gain setting value
     #
@@ -509,6 +536,11 @@ if { [lindex $result 0] == 0 } {
     colorputs -newline "Failed to clear ADU100 $adu100_index, return value $result" red
     exit
 }
+
+# Turn the LED on
+puts [status_led -adu100_index 0 -setting "on"]
+after 500
+puts [status_led -adu100_index 0 -setting "off"]
 
 # Open the datafile
 # set datafile "ilogger.dat"
