@@ -52,7 +52,6 @@ try {
     exit
 }
 
-
 # Logtable for tabular console logging
 try {
     set version [package require logtable]
@@ -67,6 +66,9 @@ try {
 source calibration.tcl
 
 source config.tcl
+
+# Working with the Lacey board
+source lacey.tcl
 
 ######################## Command-line parsing ########################
 
@@ -226,30 +228,16 @@ proc initialize_adu100 { adu100_index an1_gain an2_gain } {
     #  adu100_index -- integer index choosing the ADU100
     set result [tcladu::initialize_device $adu100_index]
     if { $result != 0 } {
-	colorputs -newline "Failed to initialize ADU100 $adu100_index, return value $result" red
+	logtable::colorputs -color red "Failed to initialize ADU100 $adu100_index, return value $result"
 	exit
     }
+    set result [tcladu::clear_queue $adu100_index]
+
     # The analog inputs need to be calibrated in case the gain setting has changed.
     calibrate_an1 $adu100_index $an1_gain
     calibrate_an2 $adu100_index $an2_gain
 
-    # Configure digital outputs
-    # CPAxxxx -- Configure data direction of PORT A ( x= 1 for input, 0 for output ) ( order is MSB-LSB )
-    # P1      -- Enables light pull-ups on I/O all lines configured as inputs.
-
-    # PA3 -- Input (spare)
-    # PA2 -- Output initialized low for the LED
-    # PA1 -- Input pulled up for calibration relay sensing
-    # PA0 -- Output initialized low for calibration relay control
-    set result [tcladu::send_command $adu100_index "CPA1010"]
-    set result [tcladu::send_command $adu100_index "P1"]
-    set success_code [lindex $result 0]
-    if { $success_code != 0 } {
-	set error_string "Failed to initialize ADU100 $adu100_index digital ports, "
-	append error_string "return value was $success_code"
-	colorputs -newline $error_string red
-	exit
-    }
+    lacey::initialize $adu100_index
     return ok
 }
 
@@ -492,7 +480,6 @@ namespace eval mainrun {
     lappend column_list [list $cal_voltage_width "Voltage"]
 }
 
-
 ########################## Main entry point ##########################
 
 # Record the invocation
@@ -531,11 +518,19 @@ puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
 set result [tcladu::clear_queue $adu100_index]
 if { [lindex $result 0] == 0 } {
-    colorputs -newline "Cleared ADU100 $adu100_index in [lindex $result 1] ms" green
+    logtable::colorputs -color green "Cleared ADU100 $adu100_index in [lindex $result 1] ms"
 } else {
-    colorputs -newline "Failed to clear ADU100 $adu100_index, return value $result" red
+    logtable::colorputs -color red "Failed to clear ADU100 $adu100_index, return value $result"
     exit
 }
+
+lacey::open_calibration_relay 0
+after 1000
+lacey::close_calibration_relay 0
+after 1000
+lacey::open_calibration_relay 0
+
+exit
 
 # Turn the LED on
 puts [status_led -adu100_index 0 -setting "on"]
@@ -580,8 +575,6 @@ foreach reading [logtable::intlist -first 0 -length 10] {
     after 1000
 }
 
-
-
 puts ""
 puts "Press q<enter> to stop logging"
 
@@ -598,7 +591,6 @@ set time_offset_s [clock seconds]
 # Start the main run
 puts [logtable::header_line -collist $mainrun::column_list]
 puts [logtable::dashline -collist $mainrun::column_list]
-
 
 set count 0
 while true {
