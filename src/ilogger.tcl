@@ -232,6 +232,12 @@ proc initialize_adu100 { adu100_index an1_gain an2_gain } {
 	exit
     }
     set result [tcladu::clear_queue $adu100_index]
+    if { [lindex $result 0] == 0 } {
+	logtable::colorputs -color green "Cleared ADU100 $adu100_index in [lindex $result 1] ms"
+    } else {
+	logtable::colorputs -color red "Failed to clear ADU100 $adu100_index, return value $result"
+	exit
+    }
 
     # The analog inputs need to be calibrated in case the gain setting has changed.
     calibrate_an1 $adu100_index $an1_gain
@@ -516,19 +522,7 @@ if {$params(sn) ne ""} {
 puts -nonewline "Initializing ADU100 $adu100_index..."
 puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
-set result [tcladu::clear_queue $adu100_index]
-if { [lindex $result 0] == 0 } {
-    logtable::colorputs -color green "Cleared ADU100 $adu100_index in [lindex $result 1] ms"
-} else {
-    logtable::colorputs -color red "Failed to clear ADU100 $adu100_index, return value $result"
-    exit
-}
-
-lacey::open_calibration_relay 0
-after 1000
-lacey::close_calibration_relay 0
-after 1000
-lacey::open_calibration_relay 0
+lacey::calibrate_current_offset 0 $params(g)
 
 exit
 
