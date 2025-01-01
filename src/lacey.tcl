@@ -280,26 +280,20 @@ proc lacey::calibrate_current_slope { args } {
     set slope_sum_counts_per_amp 0
     set readings 5
     foreach reading [logtable::intlist -first 0 -length $readings] {
-	set an1_raw_counts [an1_bipolar_counts $arg(adu100_index) $arg(range)]
-	# 32768 is zero for signed 16-bit
-	if {$an1_raw_counts < 32768} {
-	    set an1_signed_counts $an1_raw_counts
-	} else {
-	    set an1_signed_counts [expr 32768 - $an1_raw_counts]
-	}
+	set an1_counts [lacey::an1_counts -adu100_index $arg(adu100_index) -range $arg(range)]
+
 	# Read Vout
 	set an2_counts [an2_unipolar_counts $arg(adu100_index) $config::an2_gain]
 	set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]
 	set ical_A [expr double($an2_V) / $calibration::calibration_resistor_ohms]
-	set slope_counts_per_amp [expr ($an1_signed_counts - $calibration::current_offset_counts($arg(range))) / $ical_A]
+	set slope_counts_per_amp [expr ($an1_counts - $calibration::current_offset_counts($arg(range))) / $ical_A]
 	set slope_sum_counts_per_amp [expr $slope_sum_counts_per_amp + $slope_counts_per_amp]
 	set value_list [list $reading \
 			    $Rcal_ohms \
 			    $arg(range) \
 			    "[format %0.3f $an2_V] V" \
 			    "[format %0.3f [expr 1000 * $ical_A]] mA" \
-			    [format %i $an1_raw_counts] \
-			    [format %i $an1_signed_counts] \
+			    [format %i $an1_counts] \
 			    [format %0.3f $slope_counts_per_amp]]
 	puts [logtable::table_row -collist $current_slope_calibration::column_list -vallist $value_list]
 	after 100
@@ -401,7 +395,6 @@ namespace eval current_slope_calibration {
     lappend column_list [list $iteration_width "Range"]
     lappend column_list [list $current_width "Vout"]
     lappend column_list [list $current_width "Cal I"]
-    lappend column_list [list $counts_width "Raw N"]
     lappend column_list [list $counts_width "Signed N"]
     lappend column_list [list $current_width "Slope"]
 }
