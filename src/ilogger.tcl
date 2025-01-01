@@ -524,6 +524,8 @@ puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
 lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
 
+lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
+
 exit
 
 # Turn the LED on

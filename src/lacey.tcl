@@ -228,19 +228,13 @@ proc ::lacey::calibrate_current_offset { args } {
     set offset_sum 0
     set readings 5
     foreach reading [logtable::intlist -first 0 -length $readings] {
-	set an1_raw_counts [an1_bipolar_counts $arg(adu100_index) $arg(range)]
-	# 32768 is zero for signed 16-bit
-	if {$an1_raw_counts < 32768} {
-	    set an1_signed_counts $an1_raw_counts
-	} else {
-	    set an1_signed_counts [expr 32768 - $an1_raw_counts]
-	}
-	set offset_sum [expr $offset_sum + $an1_signed_counts]
+	# Query the signed counts from AN1
+	set an1_counts [lacey::an1_counts -adu100_index $arg(adu100_index) -range $arg(range)]
+	set offset_sum [expr $offset_sum + $an1_counts]
 	set value_list [list $reading \
 			    $Rcal_ohms \
 			    $arg(range) \
-			    [format %i $an1_raw_counts] \
-			    [format %i $an1_signed_counts]]
+			    [format %i $an1_counts]]
 	puts [logtable::table_row -collist $current_offset_calibration::column_list -vallist $value_list]
 	after 100
     }
@@ -249,6 +243,72 @@ proc ::lacey::calibrate_current_offset { args } {
     set calibration::current_offset_counts($arg(range)) $offset_average
     logtable::info_message "Range $arg(range) offset is $calibration::current_offset_counts($arg(range))"
     lacey::open_source_relay $arg(adu100_index)
+}
+
+proc lacey::calibrate_current_slope { args } {
+    # Measure and write the slope value for current measurements with
+    # the given range.
+    #
+    # Arguments:
+    #   range -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
+    #   adu100_index -- 0, 1, ... , connected ADU100s -1
+    set usage "--> usage: calibrate_current_slope \[options\]"
+    set myoptions {
+	{adu100_index.arg "0" "ADU100 index"}
+	{range.arg "0" "0-7 with 0 being the minimum gain"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    # Check if the offset has already been calibrated
+    if {$calibration::current_offset_counts($arg(range)) eq ""} {
+	# The offset hasn't been calibrated
+	calibrate_current_offset $arg(range) $arg(adu100_index)
+    }
+
+    # Close the source relay
+    close_source_relay $arg(adu100_index)
+
+    # Close the calibration relay (Rcal = Rcal)
+    close_calibration_relay $arg(adu100_index)
+    set Rcal_ohms $calibration::calibration_resistor_ohms
+
+    puts ""
+    puts [logtable::header_line -collist $current_slope_calibration::column_list]
+    puts [logtable::dashline -collist $current_slope_calibration::column_list]
+
+    # Readings with the calibration relay closed
+    set slope_sum_counts_per_amp 0
+    set readings 5
+    foreach reading [logtable::intlist -first 0 -length $readings] {
+	set an1_raw_counts [an1_bipolar_counts $arg(adu100_index) $arg(range)]
+	# 32768 is zero for signed 16-bit
+	if {$an1_raw_counts < 32768} {
+	    set an1_signed_counts $an1_raw_counts
+	} else {
+	    set an1_signed_counts [expr 32768 - $an1_raw_counts]
+	}
+	# Read Vout
+	set an2_counts [an2_unipolar_counts $arg(adu100_index) $config::an2_gain]
+	set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]
+	set ical_A [expr double($an2_V) / $calibration::calibration_resistor_ohms]
+	set slope_counts_per_amp [expr ($an1_signed_counts - $calibration::current_offset_counts($arg(range))) / $ical_A]
+	set slope_sum_counts_per_amp [expr $slope_sum_counts_per_amp + $slope_counts_per_amp]
+	set value_list [list $reading \
+			    $Rcal_ohms \
+			    $arg(range) \
+			    "[format %0.3f $an2_V] V" \
+			    "[format %0.3f [expr 1000 * $ical_A]] mA" \
+			    [format %i $an1_raw_counts] \
+			    [format %i $an1_signed_counts] \
+			    [format %0.3f $slope_counts_per_amp]]
+	puts [logtable::table_row -collist $current_slope_calibration::column_list -vallist $value_list]
+	after 100
+    }
+    set slope_average_counts_per_amp [expr double($slope_sum_counts_per_amp)/$readings]
+    set calibration::current_slope_counts_per_amp($arg(range)) $slope_average_counts_per_amp
+    set message "Range $arg(range) slope is [format %0.3f $calibration::current_slope_counts_per_amp($arg(range))] counts/Amp"
+    logtable::info_message $message
+    open_source_relay $arg(adu100_index)
 }
 
 proc ::lacey::status_led {args} {
@@ -278,6 +338,39 @@ proc ::lacey::status_led {args} {
     }
 }
 
+proc ::lacey::an1_counts {args} {
+    # Return ADC counts from AN1, which is a differential input
+    # between the AN1 and LCOM terminals.  The output will be signed counts:
+    # -32768 --> Full-scale current flowing out of +5V terminal
+    # 0      --> No current
+    # +32768 --> Full-scale currrent flowing into +5V terminal
+    set usage "--> usage: an1_counts \[options\]"
+    set myoptions {
+	{adu100_index.arg 0 "ADU100 index"}
+	{range.arg "0" "0-7 with 0 being the minimum gain"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    # Query the raw counts
+    set result [tcladu::query $arg(adu100_index) "RBN1$arg(range)"]
+    set success_code [lindex $result 0]
+    if { $success_code == 0 } {
+	# Query was successful
+	set raw_counts [lindex $result 1]
+	# These counts will be padded with leading zeros.  We need to remove them.
+	set unsigned_counts [tcladu::force_integer $raw_counts]
+	# 32768 is zero for signed 16-bit
+	if {$unsigned_counts < 32768} {
+	    set signed_counts $unsigned_counts
+	} else {
+	    set signed_counts [expr 32768 - $unsigned_counts]
+	}
+	return $signed_counts
+    } else {
+	return error -errorinfo "Problem querying AN1 on device $arg(adu100_index)"
+    }
+}
+
 ########################### Define tables ############################
 
 namespace eval current_offset_calibration {
@@ -291,6 +384,24 @@ namespace eval current_offset_calibration {
     lappend column_list [list $iteration_width "Read"]
     lappend column_list [list $iteration_width "Rcal"]
     lappend column_list [list $iteration_width "Range"]
+    lappend column_list [list $counts_width "Signed N"]
+}
+
+namespace eval current_slope_calibration {
+    # Configure the current slope calibration table
+
+    # Table column widths
+    variable iteration_width 10
+    variable counts_width 12
+    variable current_width 12
+
+    # Alternating widths and names for the table
+    lappend column_list [list $iteration_width "Read"]
+    lappend column_list [list $iteration_width "Rcal"]
+    lappend column_list [list $iteration_width "Range"]
+    lappend column_list [list $current_width "Vout"]
+    lappend column_list [list $current_width "Cal I"]
     lappend column_list [list $counts_width "Raw N"]
     lappend column_list [list $counts_width "Signed N"]
+    lappend column_list [list $current_width "Slope"]
 }
