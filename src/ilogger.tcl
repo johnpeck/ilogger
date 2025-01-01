@@ -522,7 +522,7 @@ if {$params(sn) ne ""} {
 puts -nonewline "Initializing ADU100 $adu100_index..."
 puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
-lacey::calibrate_current_offset 0 $params(g)
+lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
 
 exit
 

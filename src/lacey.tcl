@@ -199,19 +199,25 @@ namespace eval lacey {
 
 }
 
-proc ::lacey::calibrate_current_offset { range adu100_index } {
+proc ::lacey::calibrate_current_offset { args } {
     # Measure and write the offset value for current measurements with
     # the given range.
     #
     # Arguments:
     #   range -- 0-7 with 0 being the minimum gain (0 - 2.5V range)
     #   adu100_index -- 0, 1, ... , connected ADU100s -1
+    set usage "--> usage: calibrate_current_offset \[options\]"
+    set myoptions {
+	{adu100_index.arg "0" "ADU100 index"}
+	{range.arg "0" "0-7 with 0 being the minimum gain"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
 
     # Close the source relay
-    lacey::close_source_relay $adu100_index
+    lacey::close_source_relay $arg(adu100_index)
 
     # Open the calibration relay (Rcal = Inf)
-    lacey::open_calibration_relay $adu100_index
+    lacey::open_calibration_relay $arg(adu100_index)
     set Rcal_ohms "Inf"
 
     puts ""
@@ -222,7 +228,7 @@ proc ::lacey::calibrate_current_offset { range adu100_index } {
     set offset_sum 0
     set readings 5
     foreach reading [logtable::intlist -first 0 -length $readings] {
-	set an1_raw_counts [an1_bipolar_counts $adu100_index $range]
+	set an1_raw_counts [an1_bipolar_counts $arg(adu100_index) $arg(range)]
 	# 32768 is zero for signed 16-bit
 	if {$an1_raw_counts < 32768} {
 	    set an1_signed_counts $an1_raw_counts
@@ -232,7 +238,7 @@ proc ::lacey::calibrate_current_offset { range adu100_index } {
 	set offset_sum [expr $offset_sum + $an1_signed_counts]
 	set value_list [list $reading \
 			    $Rcal_ohms \
-			    $range \
+			    $arg(range) \
 			    [format %i $an1_raw_counts] \
 			    [format %i $an1_signed_counts]]
 	puts [logtable::table_row -collist $current_offset_calibration::column_list -vallist $value_list]
@@ -240,9 +246,9 @@ proc ::lacey::calibrate_current_offset { range adu100_index } {
     }
     set offset_average [expr double($offset_sum)/$readings]
 
-    set calibration::current_offset_counts($range) $offset_average
-    logtable::info_message "Range $range offset is $calibration::current_offset_counts($range)"
-    lacey::open_source_relay $adu100_index
+    set calibration::current_offset_counts($arg(range)) $offset_average
+    logtable::info_message "Range $arg(range) offset is $calibration::current_offset_counts($arg(range))"
+    lacey::open_source_relay $arg(adu100_index)
 }
 
 proc ::lacey::status_led {args} {
