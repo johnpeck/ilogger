@@ -283,8 +283,9 @@ proc lacey::calibrate_current_slope { args } {
 	set an1_counts [lacey::an1_counts -adu100_index $arg(adu100_index) -range $arg(range)]
 
 	# Read Vout
-	set an2_counts [an2_unipolar_counts $arg(adu100_index) $config::an2_gain]
-	set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]
+	set an2_counts [lacey::an2_counts -adu100_index $arg(adu100_index)]
+	# set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]
+	set an2_V [lacey::an2_volts -counts $an2_counts]
 	set ical_A [expr double($an2_V) / $calibration::calibration_resistor_ohms]
 	set slope_counts_per_amp [expr ($an1_counts - $calibration::current_offset_counts($arg(range))) / $ical_A]
 	set slope_sum_counts_per_amp [expr $slope_sum_counts_per_amp + $slope_counts_per_amp]
@@ -363,6 +364,49 @@ proc ::lacey::an1_counts {args} {
     } else {
 	return error -errorinfo "Problem querying AN1 on device $arg(adu100_index)"
     }
+}
+
+proc ::lacey::an2_counts {args} {
+    # Return ADC counts from AN2, which is a single-ended input
+    # looking at the +5V output.  The output will be unsigned counts.
+    set usage "--> usage: an2_counts \[options\]"
+    set myoptions {
+	{adu100_index.arg 0 "ADU100 index"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    # The voltage-measurement gain setting will likely never change,
+    # so it goes in the config.
+    set gain_setting $::config::an2_gain
+    set result [tcladu::query $arg(adu100_index) "RUN2$gain_setting"]
+    set success_code [lindex $result 0]
+    if { $success_code == 0 } {
+	# Query was successful
+	set raw_counts [lindex $result 1]
+	# These counts will be padded with leading zeros.  We need to remove them.
+	set unsigned_counts [tcladu::force_integer $raw_counts]
+	return $unsigned_counts
+    } else {
+	return error -errorinfo "Problem querying AN2 on device $arg(adu100_index)"
+    }
+}
+
+proc ::lacey::an2_volts {args} {
+    # Return the voltage corresponding to the ADC counts converted by
+    # AN2's ADC.
+    set usage "--> usage: an2_volts \[options\]"
+    set myoptions {
+	{counts.arg 65535 "Counts from AN2's ADC"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    set gain_setting $::config::an2_gain
+    if {$gain_setting == 1} {
+	set voltage [expr (double($arg(counts)) / 65535) * 10.0 ]
+    } else {
+	set voltage [expr (double($arg(counts)) / 65535) * 5.0 ]
+    }
+    return $voltage
 }
 
 ########################### Define tables ############################
