@@ -300,8 +300,8 @@ proc lacey::calibrate_current_slope { args } {
 	after 100
     }
     set slope_average_counts_per_amp [expr double($slope_sum_counts_per_amp)/$readings]
-    set calibration::current_slope_counts_per_amp($arg(range)) $slope_average_counts_per_amp
-    set message "Range $arg(range) slope is [format %0.3f $calibration::current_slope_counts_per_amp($arg(range))] counts/Amp"
+    set calibration::current_slope_counts_per_A($arg(range)) $slope_average_counts_per_amp
+    set message "Range $arg(range) slope is [format %0.3f $calibration::current_slope_counts_per_A($arg(range))] counts/Amp"
     logtable::info_message $message
     open_source_relay $arg(adu100_index)
 }
@@ -407,6 +407,39 @@ proc ::lacey::an2_volts {args} {
 	set voltage [expr (double($arg(counts)) / 65535) * 5.0 ]
     }
     return $voltage
+}
+
+proc ::lacey::calibrated_current_A {args} {
+    # Return an output current measurement calculated from AN1 ADC
+    # counts.
+    set usage "--> usage: calibrated_current_A \[options\]"
+    set myoptions {
+	{counts.arg 0 "Counts from AN1's ADC"}
+	{range.arg "0" "0-7 with 0 being the minimum gain"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    # Check if the slope and offset have been calibrated
+    if {$calibration::current_offset_counts($arg(range)) eq ""} {
+	# The offset hasn't been calibrated
+	puts "Warning -- Offset has not been calibrated.  Using default 0 offset"
+	set offset_counts 0
+    } else {
+	set offset_counts $calibration::current_offset_counts($arg(range))
+    }
+
+    if {$calibration::current_slope_counts_per_A($arg(range)) eq ""} {
+	# The slope hasn't been calibrated
+	puts "Warning -- Slope has not been calibrated.  Using default of 1 count/A"
+	set slope_counts_per_A 1
+    } else {
+	set slope_counts_per_A
+    }
+
+    set calibrated_measurement_A [expr (double($arg(counts)) - double($offset_counts)) /\
+				      double($slope_counts_per_A)]
+    return $calibrated_measurement_A
+
 }
 
 ########################### Define tables ############################

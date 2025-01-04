@@ -67,6 +67,9 @@ source calibration.tcl
 
 source config.tcl
 
+# Database
+source database.tcl
+
 # Working with the Lacey board
 source lacey.tcl
 
