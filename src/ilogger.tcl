@@ -443,9 +443,13 @@ if {$params(sn) ne ""} {
 puts -nonewline "Initializing ADU100 $adu100_index..."
 puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
+puts [database::create_adu100_table -serial [lindex $serial_number_list $adu100_index]]
+
 lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
 
 lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
+
+database::write_adu100_calibration_row -serial [lindex $serial_number_list $adu100_index] -range 0
 
 exit
 
