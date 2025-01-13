@@ -347,6 +347,18 @@ proc current_A { adu100_index gain_setting } {
     return $an1_A
 }
 
+proc pdict {dict {pattern *}} {
+   set longest 0
+   dict for {key -} $dict {
+      if {[string match $pattern $key]} {
+         set longest [expr {max($longest, [string length $key])}]
+      }
+   }
+   dict for {key value} [dict filter $dict key $pattern] {
+      puts [format "%-${longest}s = %s" $key $value]
+   }
+}
+
 proc initialize_datafile {} {
     # Initialize the datafile and return a file pointer
     set datafile "ilogger.dat"
@@ -443,13 +455,15 @@ if {$params(sn) ne ""} {
 puts -nonewline "Initializing ADU100 $adu100_index..."
 puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
-puts [database::create_adu100_table -serial [lindex $serial_number_list $adu100_index]]
+database::create_adu100_table -serial [lindex $serial_number_list $adu100_index]
 
-lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
+pdict $calibration::cal_dict
 
-lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
+# lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
 
-database::write_adu100_calibration_row -serial [lindex $serial_number_list $adu100_index] -range 0
+# lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
+
+# database::write_adu100_calibration_row -serial [lindex $serial_number_list $adu100_index] -range 0
 
 exit
 

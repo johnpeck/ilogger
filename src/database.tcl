@@ -81,8 +81,31 @@ namespace eval database {
 
 	lappend column_list "'offset' REAL"
 
-	# Create the table
-	db eval "CREATE TABLE IF NOT EXISTS '$arg(serial)' ([join $column_list ", "])"
+	set found_table [db eval "SELECT name FROM sqlite_master WHERE type='table' AND name='$arg(serial)'"]
+	if {$found_table eq $arg(serial)} {
+	    puts "table exists"
+	    # Read the table into a dictionary
+	    foreach range [logtable::intlist -length 8] {
+		db eval "SELECT * FROM $arg(serial) WHERE range = $range" values {
+		    lappend offset_list $values(offset)
+		    lappend slope_list $values(slope)
+		}
+	    }
+	    puts $offset_list
+	    puts $slope_list
+	    dict set calibration::cal_dict $arg(serial) slope_list $slope_list
+	    dict set calibration::cal_dict $arg(serial) offset_list $offset_list
+	} else {
+	    puts "table does not exist"
+	    # Create the table
+	    db eval "CREATE TABLE '$arg(serial)' ([join $column_list ", "])"
+	    # Write defaults
+	    set default_slope 1.0
+	    set default_offset 0.0
+	    foreach range [logtable::intlist -length 8] {
+		db eval "INSERT INTO '$arg(serial)' VALUES('$range','$default_slope','$default_offset')"
+	    }
+	}
 
 	db close
 	return ok
