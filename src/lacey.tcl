@@ -213,6 +213,7 @@ proc ::lacey::calibrate_current_offset { args } {
     }
     array set arg [::cmdline::getoptions args $myoptions $usage]
 
+    set serial_number [lindex $calibration::serial_number_list $arg(adu100_index)]
     # Close the source relay
     lacey::close_source_relay $arg(adu100_index)
 
@@ -240,8 +241,11 @@ proc ::lacey::calibrate_current_offset { args } {
     }
     set offset_average [expr double($offset_sum)/$readings]
 
-    set calibration::current_offset_counts($arg(range)) $offset_average
-    logtable::info_message "Range $arg(range) offset is $calibration::current_offset_counts($arg(range))"
+    # set calibration::current_offset_counts($arg(range)) $offset_average
+    set old_offset_list [dict get $calibration::cal_dict $serial_number offset_list]
+    set new_offset_list [lreplace $old_offset_list $arg(range) $arg(range) $offset_average]
+    dict set calibration::cal_dict $serial_number offset_list $new_offset_list
+    logtable::info_message "Range $arg(range) offset is $offset_average"
     lacey::open_source_relay $arg(adu100_index)
 }
 

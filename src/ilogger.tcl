@@ -435,8 +435,8 @@ try {
 }
 
 try {
-    set serial_number_list [tcladu::serial_number_list]
-    puts "Found serial numbers [join $serial_number_list]"
+    set calibration::serial_number_list [tcladu::serial_number_list]
+    puts "Found serial numbers [join $calibration::serial_number_list]"
 } trap {} {message optidict} {
     puts $message
     puts "Failed to find any ADU100s...maybe you need to plug cycle them?"
@@ -444,7 +444,7 @@ try {
 }
 
 if {$params(sn) ne ""} {
-    set adu100_index [lsearch $serial_number_list $params(sn)]
+    set adu100_index [lsearch $calibration::serial_number_list $params(sn)]
     if {$adu100_index > -1} {
 	colorputs -newline "Found serial number $params(sn) at index $adu100_index" green
     }
@@ -455,12 +455,13 @@ if {$params(sn) ne ""} {
 puts -nonewline "Initializing ADU100 $adu100_index..."
 puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
-database::create_adu100_table -serial [lindex $serial_number_list $adu100_index]
+database::init_cal_dict -serial [lindex $calibration::serial_number_list $adu100_index]
 
 pdict $calibration::cal_dict
 
-# lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
+lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
 
+pdict $calibration::cal_dict
 # lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
 
 # database::write_adu100_calibration_row -serial [lindex $serial_number_list $adu100_index] -range 0

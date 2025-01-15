@@ -56,32 +56,20 @@ namespace eval database {
 
     }
 
-    proc create_adu100_table {args} {
-	# Create a new table for an ADU100 calibration
-	# The table will be named with the serial number.
-	# |-------+-------+--------|
-	# | Range | Slope | Offset |
-	# |-------+-------+--------|
-	# |     0 |       |        |
-	# |     1 |       |        |
-	# |   ... |       |        |
-	# |-------+-------+--------|
-	set usage "--> usage: create_adu100_table \[options\]"
+    proc init_cal_dict {args} {
+	# Populate the calibration dictionary from the database,
+	# creating a new table for a new ADU100 if necessary.
+
+	set usage "--> usage: init_cal_dict \[options\]"
 	set myoptions {
 	    {serial.arg "" "Serial number"}
 	}
 	array set arg [::cmdline::getoptions args $myoptions $usage]
 	sqlite3 db $database::db_file
 
-	# Single quotes in SQLite are around string literals.  The name of
-	# the column should be in single quotes.
-	lappend column_list "'range' INTEGER"
-
-	lappend column_list "'slope' REAL"
-
-	lappend column_list "'offset' REAL"
-
 	set found_table [db eval "SELECT name FROM sqlite_master WHERE type='table' AND name='$arg(serial)'"]
+	set slope_list [list]
+	set offset_list [list]
 	if {$found_table eq $arg(serial)} {
 	    puts "table exists"
 	    # Read the table into a dictionary
@@ -91,21 +79,38 @@ namespace eval database {
 		    lappend slope_list $values(slope)
 		}
 	    }
-	    puts $offset_list
-	    puts $slope_list
-	    dict set calibration::cal_dict $arg(serial) slope_list $slope_list
-	    dict set calibration::cal_dict $arg(serial) offset_list $offset_list
 	} else {
+	    # The table for this ADU100 does not exist
 	    puts "table does not exist"
 	    # Create the table
+	    # The table will be named with the serial number.
+	    # |-------+-------+--------|
+	    # | Range | Slope | Offset |
+	    # |-------+-------+--------|
+	    # |     0 |       |        |
+	    # |     1 |       |        |
+	    # |   ... |       |        |
+	    # |-------+-------+--------|
+
+	    # Single quotes in SQLite are around string literals.  The name of
+	    # the column should be in single quotes.
+	    lappend column_list "'range' INTEGER"
+
+	    lappend column_list "'slope' REAL"
+
+	    lappend column_list "'offset' REAL"
 	    db eval "CREATE TABLE '$arg(serial)' ([join $column_list ", "])"
 	    # Write defaults
 	    set default_slope 1.0
 	    set default_offset 0.0
 	    foreach range [logtable::intlist -length 8] {
 		db eval "INSERT INTO '$arg(serial)' VALUES('$range','$default_slope','$default_offset')"
+		lappend slope_list $default_slope
+		lappend offset_list $default_offset
 	    }
 	}
+	dict set calibration::cal_dict $arg(serial) slope_list $slope_list
+	dict set calibration::cal_dict $arg(serial) offset_list $offset_list
 
 	db close
 	return ok
