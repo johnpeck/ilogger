@@ -116,6 +116,32 @@ namespace eval database {
 	return ok
     }
 
+    proc write_cal_dict {args} {
+	set usage "--> usage: write_cal_dict \[options\]"
+	set myoptions {
+	}
+	array set arg [::cmdline::getoptions args $myoptions $usage]
+	sqlite3 db $database::db_file
+	# Delete the old tables
+	foreach sn [dict keys $calibration::cal_dict] {
+	    db eval "DROP TABLE $sn"
+	}
+	# Write new tables
+	lappend column_list "'range' INTEGER"
+	lappend column_list "'slope' REAL"
+	lappend column_list "'offset' REAL"
+	foreach sn [dict keys $calibration::cal_dict] {
+	    db eval "CREATE TABLE '$sn' ([join $column_list ", "])"
+	    foreach range [logtable::intlist -length 8] {
+		set slope [lindex [dict get $calibration::cal_dict $sn slope_list] $range]
+		set offset [lindex [dict get $calibration::cal_dict $sn offset_list] $range]
+		db eval "INSERT INTO '$sn' VALUES('$range','$slope','$offset')"
+	    }
+	}
+	db close
+	return ok
+    }
+
     proc write_adu100_calibration_row {args} {
 	set usage "--> usage: write_adu100_calibration_row \[options\]"
 	set myoptions {

@@ -246,6 +246,7 @@ proc ::lacey::calibrate_current_offset { args } {
     set new_offset_list [lreplace $old_offset_list $arg(range) $arg(range) $offset_average]
     dict set calibration::cal_dict $serial_number offset_list $new_offset_list
     logtable::info_message "Range $arg(range) offset is $offset_average"
+    database::write_cal_dict
     lacey::open_source_relay $arg(adu100_index)
 }
 
@@ -263,11 +264,10 @@ proc lacey::calibrate_current_slope { args } {
     }
     array set arg [::cmdline::getoptions args $myoptions $usage]
 
-    # Check if the offset has already been calibrated
-    if {$calibration::current_offset_counts($arg(range)) eq ""} {
-	# The offset hasn't been calibrated
-	calibrate_current_offset $arg(range) $arg(adu100_index)
-    }
+    set serial_number [lindex $calibration::serial_number_list $arg(adu100_index)]
+
+    # Offset must be measured first to get an accurate slope
+    set offset_counts [lindex [dict get $calibration::cal_dict $serial_number offset_list] $arg(range)]
 
     # Close the source relay
     close_source_relay $arg(adu100_index)
@@ -291,7 +291,7 @@ proc lacey::calibrate_current_slope { args } {
 	# set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]
 	set an2_V [lacey::an2_volts -counts $an2_counts]
 	set ical_A [expr double($an2_V) / $calibration::calibration_resistor_ohms]
-	set slope_counts_per_amp [expr ($an1_counts - $calibration::current_offset_counts($arg(range))) / $ical_A]
+	set slope_counts_per_amp [expr ($an1_counts - $offset_counts) / $ical_A]
 	set slope_sum_counts_per_amp [expr $slope_sum_counts_per_amp + $slope_counts_per_amp]
 	set value_list [list $reading \
 			    $Rcal_ohms \
@@ -304,9 +304,13 @@ proc lacey::calibrate_current_slope { args } {
 	after 100
     }
     set slope_average_counts_per_amp [expr double($slope_sum_counts_per_amp)/$readings]
-    set calibration::current_slope_counts_per_A($arg(range)) $slope_average_counts_per_amp
-    set message "Range $arg(range) slope is [format %0.3f $calibration::current_slope_counts_per_A($arg(range))] counts/Amp"
+    # set calibration::current_slope_counts_per_A($arg(range)) $slope_average_counts_per_amp
+    set old_slope_list [dict get $calibration::cal_dict $serial_number slope_list]
+    set new_slope_list [lreplace $old_slope_list $arg(range) $arg(range) $slope_average_counts_per_amp]
+    dict set calibration::cal_dict $serial_number slope_list $new_slope_list
+    set message "Range $arg(range) slope is [format %0.3f $slope_average_counts_per_amp] counts/Amp"
     logtable::info_message $message
+    database::write_cal_dict
     open_source_relay $arg(adu100_index)
 }
 

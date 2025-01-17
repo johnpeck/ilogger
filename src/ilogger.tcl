@@ -457,12 +457,14 @@ puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 
 database::init_cal_dict -serial [lindex $calibration::serial_number_list $adu100_index]
 
+logtable::info_message "Read in calibration data:"
 pdict $calibration::cal_dict
 
 lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
 
 pdict $calibration::cal_dict
-# lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
+lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
+pdict $calibration::cal_dict
 
 # database::write_adu100_calibration_row -serial [lindex $serial_number_list $adu100_index] -range 0
 
