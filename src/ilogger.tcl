@@ -82,6 +82,8 @@ append usage "usage: [file tail $thisfile] \[options\]"
 
 lappend options [list sn.arg "" "ADU100 serial number (Empty if only one)"]
 lappend options [list g.arg 0 "Analog measurement gain (0, 1, ..., 7)"]
+lappend options [list c "Calibrate and exit"]
+lappend options [list v "Make more verbose"]
 
 set invocation "tclsh ilogger.tcl $argv"
 try {
@@ -379,6 +381,81 @@ proc initialize_datafile {} {
     return $fid
 }
 
+proc make_verbose {} {
+    return "-v"
+}
+
+proc test_calibration { args } {
+    # Test the current measurement in one range
+    set usage "--> usage: test_calibration \[options\]"
+    set myoptions {
+	{adu100_index.arg 0 "ADU100 index"}
+	{range.arg "0" "0-7 with 0 being the minimum gain"}
+	{v "Make more verbose"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+    set serial_number [lindex $calibration::serial_number_list $arg(adu100_index)]
+
+    # Close the source relay
+    lacey::close_source_relay -adu100_index $arg(adu100_index) [if $arg(v) make_verbose]
+
+    # Close the calibration relay (Rcal = Rcal)
+    lacey::close_calibration_relay $arg(adu100_index)
+    set Rcal_ohms $calibration::calibration_resistor_ohms
+
+    puts ""
+    puts [logtable::header_line -collist $calibration_check_table::column_list]
+    puts [logtable::dashline -collist $calibration_check_table::column_list]
+
+    # Readings with the calibration relay closed
+    set measured_current_sum_amps 0
+    set readings 5
+    foreach reading [logtable::intlist -first 0 -length $readings] {
+
+	# Read differential voltage corresponding to output current
+	set an1_counts [lacey::an1_counts -adu100_index $arg(adu100_index) -range $arg(range)]
+
+	# Read Vout
+	set an2_counts [lacey::an2_counts -adu100_index $arg(adu100_index)]
+	set an2_V [lacey::an2_volts -counts $an2_counts]
+
+	# Calculated calibration current based on calibration resistor
+	set ical_A [expr double($an2_V) / $calibration::calibration_resistor_ohms]
+	set slope_counts_per_amp [lindex [dict get $calibration::cal_dict $serial_number slope_list] $arg(range)]
+	set offset_counts [lindex [dict get $calibration::cal_dict $serial_number offset_list] $arg(range)]
+	set calibrated_measurement_amps [expr (double($an1_counts) - double($offset_counts)) /\
+					    double($slope_counts_per_amp)]
+
+	set measured_current_sum_amps [expr $measured_current_sum_amps + $calibrated_measurement_amps]
+	set value_list [list $reading \
+			    $Rcal_ohms \
+			    $arg(range) \
+			    "[format %0.3f $an2_V] V" \
+			    "[format %0.3f [expr 1000 * $ical_A]] mA" \
+			    [format %i $an1_counts] \
+			    [format %0.3f $slope_counts_per_amp] \
+			    [format %0.3f $offset_counts] \
+			    "[format %0.3f [expr 1000 * $calibrated_measurement_amps]] mA"]
+	puts [logtable::table_row -collist $calibration_check_table::column_list -vallist $value_list]
+	after 100
+    }
+    set current_average_milliamps [expr double($measured_current_sum_amps)/$readings * 1000]
+    set message "Measurement in range $arg(range) slope is [format %0.3f $current_average_milliamps] mA"
+    logtable::info_message $message
+    lacey::open_source_relay $arg(adu100_index)
+    lacey::open_calibration_relay $arg(adu100_index)
+
+    # Measurement should be within 1mA of 50mA
+    set correct [expr ($current_average_milliamps >= 49) && ($current_average_milliamps <= 51)]
+    if $correct {
+	logtable::pass_message "Calibration test passes"
+	return
+    } else {
+	logtable::fail_message "Failed to calibrate current measurement"
+	exit
+    }
+}
+
 namespace eval dryrun {
     # Configure the dry run table
 
@@ -417,6 +494,26 @@ namespace eval mainrun {
     lappend column_list [list $cal_current_width "Current"]
     lappend column_list [list $an2_counts_width "AN2 Counts"]
     lappend column_list [list $cal_voltage_width "Voltage"]
+}
+
+namespace eval calibration_check_table {
+    # Configure the calibration check table
+
+    # Table column widths
+    variable iteration_width 10
+    variable counts_width 12
+    variable measurement_width 12
+
+    # Alternating widths and names for the table
+    lappend column_list [list $iteration_width "Read"]
+    lappend column_list [list $iteration_width "Rcal"]
+    lappend column_list [list $iteration_width "Range"]
+    lappend column_list [list $measurement_width "Vout"]
+    lappend column_list [list $measurement_width "Cal I"]
+    lappend column_list [list $counts_width "Signed N"]
+    lappend column_list [list $measurement_width "Slope"]
+    lappend column_list [list $measurement_width "Offset"]
+    lappend column_list [list $measurement_width "Calibrated"]
 }
 
 ########################## Main entry point ##########################
@@ -460,46 +557,42 @@ database::init_cal_dict -serial [lindex $calibration::serial_number_list $adu100
 logtable::info_message "Read in calibration data:"
 pdict $calibration::cal_dict
 
-lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
+if $params(c) {
+    # Calibrate in the chosen current range and exit
+    lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
 
-pdict $calibration::cal_dict
-lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
-pdict $calibration::cal_dict
-
-# database::write_adu100_calibration_row -serial [lindex $serial_number_list $adu100_index] -range 0
-
-exit
+    pdict $calibration::cal_dict
+    lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
+    pdict $calibration::cal_dict
+    test_calibration -adu100_index 0 -range $params(g) [if $params(v) make_verbose]
+    exit
+}
 
 # Turn the LED on
 puts [status_led -adu100_index 0 -setting "on"]
 after 500
 puts [status_led -adu100_index 0 -setting "off"]
 
-# Open the datafile
-# set datafile "ilogger.dat"
-# try {
-#     set fid [open $datafile w+]
-# } trap {} {message optdict} {
-#     puts $message
-#     exit
-# }
-
 set fid [initialize_datafile]
 
-close_relay $adu100_index
+lacey::close_source_relay -adu100_index $adu100_index -v
 # Wait for reading to settle
 after 1000
+
+puts [lacey::calibrated_current_A -adu100_index 0 -range $params(g)]
+lacey::open_source_relay 0
+exit
 
 # Start the dry run
 puts [logtable::header_line -collist $dryrun::column_list]
 puts [logtable::dashline -collist $dryrun::column_list]
 
 foreach reading [logtable::intlist -first 0 -length 10] {
-    set an1_counts [an1_bipolar_counts $adu100_index $params(g)]
-    set an1_V [anx_bipolar_volts $an1_counts $params(g)]
-    set an1_A [A_from_V $an1_V $params(g) $calibration::cal_dict]
-    set an1_mA [expr 1000 * $an1_A]
-    set an1_mV [expr 1000 * $an1_V]
+    # set an1_counts [an1_bipolar_counts $adu100_index $params(g)]
+    # set an1_V [anx_bipolar_volts $an1_counts $params(g)]
+    # set an1_A [A_from_V $an1_V $params(g) $calibration::cal_dict]
+    # set an1_mA [expr 1000 * $an1_A]
+    # set an1_mV [expr 1000 * $an1_V]
 
     set an2_counts [an2_unipolar_counts $adu100_index $config::an2_gain]
     set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]

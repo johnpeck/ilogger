@@ -169,34 +169,80 @@ namespace eval lacey {
 	}
     }
 
-    proc close_source_relay { adu100_index } {
-	# Close the ADU100's relay
-	#
-	# Arguments:
-	#   adu100_index -- integer index choosing the ADU100
+    # proc close_source_relay { adu100_index } {
+    # 	# Close the ADU100's relay
+    # 	#
+    # 	# Arguments:
+    # 	#   adu100_index -- integer index choosing the ADU100
+    #
+    # 	# SK0 "sets" (closes) relay contact 0, the only relay
+    # 	set result [tcladu::send_command 0 "SK0"]
+    # 	set success_code [lindex $result 0]
+    # 	set elapsed_ms [lindex $result 1]
+    # 	if { $success_code == 0 } {
+    # 	    # logtable::info_message "Sent request to close source relay"
+    # 	} else {
+    # 	    logtable::fail_message "Failed to write 'SK0' to ADU100 0"
+    # 	    exit
+    # 	}
+    #
+    # 	# RPK0 queries the status of relay 0
+    # 	set result [tcladu::query 0 "RPK0"]
+    # 	set success_code [lindex $result 0]
+    # 	set response [lindex $result 1]
+    # 	set elapsed_ms [lindex $result 2]
+    #
+    # 	if { $success_code == 0 && $response == 1 } {
+    # 	    logtable::info_message "Closed source relay in $elapsed_ms ms"
+    # 	}
+    # }
 
-	# SK0 "sets" (closes) relay contact 0, the only relay
-	set result [tcladu::send_command 0 "SK0"]
-	set success_code [lindex $result 0]
-	set elapsed_ms [lindex $result 1]
-	if { $success_code == 0 } {
-	    # logtable::info_message "Sent request to close source relay"
-	} else {
-	    logtable::fail_message "Failed to write 'SK0' to ADU100 0"
-	    exit
+}
+
+proc ::lacey::close_source_relay { args } {
+    # Close the ADU100's main relay
+    #
+    # This is the relay inside the ADU100 (K0)
+    set usage "--> usage: close_source_relay \[options\]"
+    set myoptions {
+	{adu100_index.arg "0" "ADU100 index"}
+	{v "Verbose output"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    # SK0 "sets" (closes) relay contact 0, the only relay
+    set result [tcladu::send_command $arg(adu100_index) "SK0"]
+
+    set success_code [lindex $result 0]
+    set elapsed_ms [lindex $result 1]
+    if { $success_code == 0 } {
+	if $arg(v) {
+	    logtable::info_message "Sent request to close source relay"
 	}
-
-	# RPK0 queries the status of relay 0
-	set result [tcladu::query 0 "RPK0"]
-	set success_code [lindex $result 0]
-	set response [lindex $result 1]
-	set elapsed_ms [lindex $result 2]
-
-	if { $success_code == 0 && $response == 1 } {
-	    logtable::info_message "Closed source relay in $elapsed_ms ms"
-	}
+    } else {
+	set message "Failed to write 'SK0' to ADU100 $arg(adu100_index)"
+	logtable::fail_message $message
+	error $message
     }
 
+    # RPK0 queries the status of relay 0
+    set result [tcladu::query 0 "RPK0"]
+    set success_code [lindex $result 0]
+    set response [lindex $result 1]
+    set elapsed_ms [lindex $result 2]
+
+    if { $success_code == 0 && $response == 1 } {
+	if $arg(v) {
+	    logtable::info_message "Closed source relay in $elapsed_ms ms"
+	}
+	return ok
+    } else {
+	set message "Source relay does not report being closed"
+	if $arg(v) {
+	    logtable::fail_message $message
+	}
+	error $message
+    }
 }
 
 proc ::lacey::calibrate_current_offset { args } {
@@ -215,7 +261,7 @@ proc ::lacey::calibrate_current_offset { args } {
 
     set serial_number [lindex $calibration::serial_number_list $arg(adu100_index)]
     # Close the source relay
-    lacey::close_source_relay $arg(adu100_index)
+    lacey::close_source_relay -adu100_index $arg(adu100_index)
 
     # Open the calibration relay (Rcal = Inf)
     lacey::open_calibration_relay $arg(adu100_index)
@@ -270,7 +316,7 @@ proc lacey::calibrate_current_slope { args } {
     set offset_counts [lindex [dict get $calibration::cal_dict $serial_number offset_list] $arg(range)]
 
     # Close the source relay
-    close_source_relay $arg(adu100_index)
+    lacey::close_source_relay -adu100_index $arg(adu100_index)
 
     # Close the calibration relay (Rcal = Rcal)
     close_calibration_relay $arg(adu100_index)
@@ -312,6 +358,7 @@ proc lacey::calibrate_current_slope { args } {
     logtable::info_message $message
     database::write_cal_dict
     open_source_relay $arg(adu100_index)
+    open_calibration_relay $arg(adu100_index)
 }
 
 proc ::lacey::status_led {args} {
@@ -418,34 +465,28 @@ proc ::lacey::an2_volts {args} {
 }
 
 proc ::lacey::calibrated_current_A {args} {
-    # Return an output current measurement calculated from AN1 ADC
-    # counts.
+    # Reads the differential voltage over the sense resistor and
+    # returns an output current measurement calculated with the
+    # calibration coefficients.
     set usage "--> usage: calibrated_current_A \[options\]"
     set myoptions {
-	{counts.arg 0 "Counts from AN1's ADC"}
+	{adu100_index.arg 0 "ADU100 index"}
 	{range.arg "0" "0-7 with 0 being the minimum gain"}
     }
     array set arg [::cmdline::getoptions args $myoptions $usage]
 
-    # Check if the slope and offset have been calibrated
-    if {$calibration::current_offset_counts($arg(range)) eq ""} {
-	# The offset hasn't been calibrated
-	puts "Warning -- Offset has not been calibrated.  Using default 0 offset"
-	set offset_counts 0
-    } else {
-	set offset_counts $calibration::current_offset_counts($arg(range))
-    }
+    set serial_number [lindex $calibration::serial_number_list $arg(adu100_index)]
 
-    if {$calibration::current_slope_counts_per_A($arg(range)) eq ""} {
-	# The slope hasn't been calibrated
-	puts "Warning -- Slope has not been calibrated.  Using default of 1 count/A"
-	set slope_counts_per_A 1
-    } else {
-	set slope_counts_per_A
-    }
+    # Read calibration
+    set slope_counts_per_amp [lindex [dict get $calibration::cal_dict $serial_number slope_list] $arg(range)]
+    set offset_counts [lindex [dict get $calibration::cal_dict $serial_number offset_list] $arg(range)]
 
-    set calibrated_measurement_A [expr (double($arg(counts)) - double($offset_counts)) /\
-				      double($slope_counts_per_A)]
+    # Read differential voltage corresponding to output current
+    set an1_counts [lacey::an1_counts -adu100_index $arg(adu100_index) -range $arg(range)]
+
+    set calibrated_measurement_A [expr (double($an1_counts) - double($offset_counts)) /\
+					    double($slope_counts_per_amp)]
+
     return $calibrated_measurement_A
 
 }
@@ -463,7 +504,7 @@ namespace eval current_offset_calibration {
     lappend column_list [list $iteration_width "Read"]
     lappend column_list [list $iteration_width "Rcal"]
     lappend column_list [list $iteration_width "Range"]
-    lappend column_list [list $counts_width "Signed N"]
+    lappend column_list [list $counts_width "Offset"]
 }
 
 namespace eval current_slope_calibration {
