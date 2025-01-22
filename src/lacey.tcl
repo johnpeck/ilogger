@@ -109,38 +109,87 @@ namespace eval lacey {
 	}
     }
 
-    proc close_calibration_relay {adu100_index} {
-	# Close the calibration relay to connect the calibration resistor
-	# to the output.
-	#
-	# Arguments:
-	#   adu100_index -- integer index choosing the ADU100
-	set high_time_ms 100
+ #    proc close_calibration_relay {adu100_index} {
+# 	# Close the calibration relay to connect the calibration resistor
+# 	# to the output.
+# 	#
+# 	# Arguments:
+# 	#   adu100_index -- integer index choosing the ADU100
+# 	set high_time_ms 100
+#
+# 	# Pulse PA0 relative to PA3 to close the relay
+# 	set result [tcladu::send_command $adu100_index "RA3"]
+# 	set result [tcladu::send_command $adu100_index "SA0"]
+# 	after $high_time_ms
+# 	set result [tcladu::send_command $adu100_index "RA0"]
+# .
+# 	# Read PA1
+# 	set result [tcladu::query $adu100_index "RPA1"]
+# 	set success_code [lindex $result 0]
+# 	if {$success_code == 0} {
+# 	    set relay_state [lindex $result 1]
+# 	    if {$relay_state == 0} {
+# 		# A closed relay will pull down PA1
+# 		logtable::info_message "Calibration relay is closed (Rcal = $calibration::calibration_resistor_ohms ohms)"
+# 		return
+# 	    } else {
+# 		logtable::colorputs -newline "Problem closing calibration relay" red
+# 	    }
+# 	} else {
+# 	    logtable::colorputs -newline "Problem reading PA1" red
+# 	    exit
+# 	}
+#     }
 
-	# Pulse PA0 relative to PA3 to close the relay
-	set result [tcladu::send_command $adu100_index "RA3"]
-	set result [tcladu::send_command $adu100_index "SA0"]
-	after $high_time_ms
-	set result [tcladu::send_command $adu100_index "RA0"]
+}
 
-	# Read PA1
-	set result [tcladu::query $adu100_index "RPA1"]
-	set success_code [lindex $result 0]
-	if {$success_code == 0} {
-	    set relay_state [lindex $result 1]
-	    if {$relay_state == 0} {
-		# A closed relay will pull down PA1
-		logtable::info_message "Calibration relay is closed (Rcal = $calibration::calibration_resistor_ohms ohms)"
-		return
-	    } else {
-		logtable::colorputs -newline "Problem closing calibration relay" red
-	    }
-	} else {
-	    logtable::colorputs -newline "Problem reading PA1" red
-	    exit
-	}
+proc ::lacey::make_verbose {} {
+    return "-v"
+}
+
+proc ::lacey::close_calibration_relay { args } {
+    # Close the calibration relay to connect the calibration resistor
+    # to the output.
+    #
+    # This is the relay on the Lacey board
+    set usage "--> usage: close_calibration_relay \[options\]"
+    set myoptions {
+	{adu100_index.arg "0" "ADU100 index"}
+	{v "Verbose output"}
     }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
 
+    # This is a latching relay, which opens and closes with a pulse.
+    # Set the width of the pulse.
+    set high_time_ms 100
+
+    # Pulse PA0 relative to PA3 to close the relay
+    set result [tcladu::send_command $arg(adu100_index) "RA3"]
+    set result [tcladu::send_command $arg(adu100_index) "SA0"]
+    after $high_time_ms
+    set result [tcladu::send_command $arg(adu100_index) "RA0"]
+
+    # Make sure the relay closed by reading PA1
+    set result [tcladu::query $arg(adu100_index) "RPA1"]
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	set relay_state [lindex $result 1]
+	if {$relay_state == 0} {
+	    # A closed relay will pull down PA1
+	    if $arg(v) {
+		logtable::info_message "Calibration relay is closed (Rcal = $calibration::calibration_resistor_ohms ohms)"
+	    }
+	    return
+	} else {
+	    set message "Problem closing calibration relay"
+	    logtable::fail_message $message
+	    error $message
+	}
+    } else {
+	set message "Problem reading PA1"
+	logtable::fail_message $message
+	error $message
+    }
 }
 
 proc ::lacey::open_source_relay { args } {
@@ -297,6 +346,7 @@ proc lacey::calibrate_current_slope { args } {
     set myoptions {
 	{adu100_index.arg "0" "ADU100 index"}
 	{range.arg "0" "0-7 with 0 being the minimum gain"}
+	{v "Make more verbose"}
     }
     array set arg [::cmdline::getoptions args $myoptions $usage]
 
@@ -309,7 +359,7 @@ proc lacey::calibrate_current_slope { args } {
     lacey::close_source_relay -adu100_index $arg(adu100_index)
 
     # Close the calibration relay (Rcal = Rcal)
-    close_calibration_relay $arg(adu100_index)
+    close_calibration_relay -adu100_index $arg(adu100_index) [if $arg(v) lacey::make_verbose]
     set Rcal_ohms $calibration::calibration_resistor_ohms
 
     puts ""

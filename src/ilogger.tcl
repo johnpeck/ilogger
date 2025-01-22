@@ -400,7 +400,7 @@ proc test_calibration { args } {
     lacey::close_source_relay -adu100_index $arg(adu100_index) [if $arg(v) make_verbose]
 
     # Close the calibration relay (Rcal = Rcal)
-    lacey::close_calibration_relay $arg(adu100_index)
+    lacey::close_calibration_relay -adu100_index $arg(adu100_index) [if $arg(v) make_verbose]
     set Rcal_ohms $calibration::calibration_resistor_ohms
 
     puts ""
