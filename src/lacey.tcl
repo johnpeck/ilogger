@@ -141,62 +141,52 @@ namespace eval lacey {
 	}
     }
 
-    proc open_source_relay { adu100_index } {
-	# Open the ADU100's relay
-	#
-	# Arguments:
-	#   adu100_index -- integer index choosing the ADU100
+}
 
-	# RK0 "resets" (opens) relay contact 0, the only relay
-	set result [tcladu::send_command 0 "RK0"]
-	set success_code [lindex $result 0]
-	set elapsed_ms [lindex $result 1]
-	if { $success_code == 0 } {
-	    # logtable::info_message "Sent request to open source relay"
-	} else {
-	    logtable::fail_message "Failed to write 'RK0' to ADU100 $adu100_index"
-	    exit
+proc ::lacey::open_source_relay { args } {
+    # Open the ADU100's main relay
+    #
+    # This is the relay inside the ADU100 (K0)
+    set usage "--> usage: close_source_relay \[options\]"
+    set myoptions {
+	{adu100_index.arg "0" "ADU100 index"}
+	{v "Verbose output"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    # RK0 "resets" (opens) relay contact 0, the only relay
+    set result [tcladu::send_command $arg(adu100_index) "RK0"]
+
+    set success_code [lindex $result 0]
+    set elapsed_ms [lindex $result 1]
+    if { $success_code == 0 } {
+	if $arg(v) {
+	    logtable::info_message "Sent request to open source relay"
 	}
-
-	# RPK0 queries the status of relay 0
-	set result [tcladu::query 0 "RPK0"]
-	set success_code [lindex $result 0]
-	set response [lindex $result 1]
-	set elapsed_ms [lindex $result 2]
-
-	if { $success_code == 0 && $response == 0 } {
-	    logtable::info_message "Opened source relay in $elapsed_ms ms"
-	}
+    } else {
+	set message "Failed to write 'RK0' to ADU100 $arg(adu100_index)"
+	logtable::fail_message $message
+	error $message
     }
 
-    # proc close_source_relay { adu100_index } {
-    # 	# Close the ADU100's relay
-    # 	#
-    # 	# Arguments:
-    # 	#   adu100_index -- integer index choosing the ADU100
-    #
-    # 	# SK0 "sets" (closes) relay contact 0, the only relay
-    # 	set result [tcladu::send_command 0 "SK0"]
-    # 	set success_code [lindex $result 0]
-    # 	set elapsed_ms [lindex $result 1]
-    # 	if { $success_code == 0 } {
-    # 	    # logtable::info_message "Sent request to close source relay"
-    # 	} else {
-    # 	    logtable::fail_message "Failed to write 'SK0' to ADU100 0"
-    # 	    exit
-    # 	}
-    #
-    # 	# RPK0 queries the status of relay 0
-    # 	set result [tcladu::query 0 "RPK0"]
-    # 	set success_code [lindex $result 0]
-    # 	set response [lindex $result 1]
-    # 	set elapsed_ms [lindex $result 2]
-    #
-    # 	if { $success_code == 0 && $response == 1 } {
-    # 	    logtable::info_message "Closed source relay in $elapsed_ms ms"
-    # 	}
-    # }
+    # RPK0 queries the status of relay 0
+    set result [tcladu::query $arg(adu100_index) "RPK0"]
+    set success_code [lindex $result 0]
+    set response [lindex $result 1]
+    set elapsed_ms [lindex $result 2]
 
+    if { $success_code == 0 && $response == 0 } {
+	if $arg(v) {
+	    logtable::info_message "Opened source relay in $elapsed_ms ms"
+	}
+	return ok
+    } else {
+	set message "Source relay does not report being open"
+	if $arg(v) {
+	    logtable::fail_message $message
+	}
+	error $message
+    }
 }
 
 proc ::lacey::close_source_relay { args } {
@@ -226,7 +216,7 @@ proc ::lacey::close_source_relay { args } {
     }
 
     # RPK0 queries the status of relay 0
-    set result [tcladu::query 0 "RPK0"]
+    set result [tcladu::query $arg(adu100_index) "RPK0"]
     set success_code [lindex $result 0]
     set response [lindex $result 1]
     set elapsed_ms [lindex $result 2]

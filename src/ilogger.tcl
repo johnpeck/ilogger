@@ -442,7 +442,7 @@ proc test_calibration { args } {
     set current_average_milliamps [expr double($measured_current_sum_amps)/$readings * 1000]
     set message "Measurement in range $arg(range) slope is [format %0.3f $current_average_milliamps] mA"
     logtable::info_message $message
-    lacey::open_source_relay $arg(adu100_index)
+    lacey::open_source_relay -adu100_index $arg(adu100_index)
     lacey::open_calibration_relay $arg(adu100_index)
 
     # Measurement should be within 1mA of 50mA
@@ -579,8 +579,8 @@ lacey::close_source_relay -adu100_index $adu100_index -v
 # Wait for reading to settle
 after 1000
 
-puts [lacey::calibrated_current_A -adu100_index 0 -range $params(g)]
-lacey::open_source_relay 0
+puts [lacey::calibrated_current_A -adu100_index $adu100_index -range $params(g)]
+lacey::open_source_relay -adu100_index $adu100_index
 exit
 
 # Start the dry run
