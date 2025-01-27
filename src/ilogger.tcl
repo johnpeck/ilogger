@@ -248,7 +248,7 @@ proc initialize_adu100 { adu100_index an1_gain an2_gain } {
     calibrate_an1 $adu100_index $an1_gain
     calibrate_an2 $adu100_index $an2_gain
 
-    lacey::initialize $adu100_index
+    lacey::initialize -adu100_index $adu100_index
     return ok
 }
 

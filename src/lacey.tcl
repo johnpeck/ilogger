@@ -36,82 +36,51 @@ try {
 }
 
 # Functions and variables for working with the ADU100 / Lacey (ADSM100) combination
-namespace eval lacey {
-
-    proc initialize {adu100_index} {
-	# Initialize lacey-specific functions
-	#
-	# Arguments:
-	#  adu100_index -- integer index choosing the ADU100
-
-	# Configure digital outputs
-	# CPAxxxx -- Configure data direction of PORT A ( x= 1 for input, 0 for output ) ( order is MSB-LSB )
-
-	# PA3 -- Output initialized low for calibration relay control
-	# PA2 -- Output initialized low for the LED
-	# PA1 -- Input pulled up for calibration relay sensing
-	# PA0 -- Output initialized low for calibration relay control
-
-	# Make sure the status LED is off
-	lacey::status_led -adu100_index $adu100_index -setting off
-
-	# Configure direction of digital outputs
-	# CPAxxxx -- Configure data direction of PORT A ( x= 1 for input, 0 for output ) ( order is MSB-LSB )
-	set result [tcladu::send_command $adu100_index "CPA0010"]
-	set success_code [lindex $result 0]
-	if { $success_code != 0 } {
-	    set error_string "Failed to initialize ADU100 $adu100_index digital ports, "
-	    append error_string "return value was $success_code"
-	    logtable::colorputs -color red $error_string
-	    exit
-	}
-
-	# P1      -- Enables light pull-ups on I/O all lines configured as inputs.
-	set result [tcladu::send_command $adu100_index "P1"]
-	set success_code [lindex $result 0]
-	if { $success_code != 0 } {
-	    set error_string "Failed to initialize ADU100 $adu100_index digital ports, "
-	    append error_string "return value was $success_code"
-	    logtable::colorputs -color $error_string
-	    exit
-	}
-	return ok
-    }
-
-    # proc open_calibration_relay {adu100_index} {
-    # 	# Open the calibration relay to disconnect the calibration resistor
-    # 	#
-    # 	# Arguments:
-    # 	#   adu100_index -- integer index choosing the ADU100
-    # 	set high_time_ms 100
-    #
-    # 	# Pulse PA3 relative to PA0 to open the relay
-    # 	set result [tcladu::send_command $adu100_index "RA0"]
-    # 	set result [tcladu::send_command $adu100_index "SA3"]
-    # 	after $high_time_ms
-    # 	set result [tcladu::send_command $adu100_index "RA3"]
-    #
-    # 	# Read PA1
-    # 	set result [tcladu::query $adu100_index "RPA1"]
-    # 	set success_code [lindex $result 0]
-    # 	if {$success_code == 0} {
-    # 	    set relay_state [lindex $result 1]
-    # 	    if {$relay_state == 1} {
-    # 		# An open relay will let PA1 be pulled up
-    # 		logtable::info_message "Calibration relay is open (Rcal = Inf)"
-    # 		return
-    # 	    } else {
-    # 		logtable::colorputs -color red "Problem opening calibration relay"
-    # 	    }
-    # 	} else {
-    # 	    logtable::colorputs -color red "Problem reading PA1"
-    # 	    exit
-    # 	}
-    # }
-}
+namespace eval lacey {}
 
 proc ::lacey::make_verbose {} {
     return "-v"
+}
+
+proc ::lacey::initialize { args } {
+    # Initialize lacey-specific functions
+    set usage "--> usage: initialize \[options\]"
+    set myoptions {
+	{adu100_index.arg "0" "ADU100 index"}
+	{v "Verbose output"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    # Configure digital outputs
+    # CPAxxxx -- Configure data direction of PORT A ( x= 1 for input, 0 for output ) ( order is MSB-LSB )
+
+    # PA3 -- Output initialized low for calibration relay control
+    # PA2 -- Output initialized low for the LED
+    # PA1 -- Input pulled up for calibration relay sensing
+    # PA0 -- Output initialized low for calibration relay control
+
+    # Make sure the status LED is off
+    lacey::status_led -adu100_index $arg(adu100_index) -setting off
+
+    # Configure direction of digital outputs
+    # CPAxxxx -- Configure data direction of PORT A ( x= 1 for input, 0 for output ) ( order is MSB-LSB )
+    set result [tcladu::send_command $arg(adu100_index) "CPA0010"]
+    set success_code [lindex $result 0]
+    if { $success_code != 0 } {
+	set message "Failed to initialize ADU100 $adu100_index digital ports, "
+	append message "return value was $success_code"
+	error $message
+    }
+
+    # P1 -- Enables light pull-ups on I/O all lines configured as inputs.
+    set result [tcladu::send_command $arg(adu100_index) "P1"]
+    set success_code [lindex $result 0]
+    if { $success_code != 0 } {
+	set message "Failed to initialize ADU100 $adu100_index digital ports, "
+	append message "return value was $success_code"
+	error $message
+    }
+    return ok
 }
 
 proc ::lacey::open_calibration_relay { args } {
