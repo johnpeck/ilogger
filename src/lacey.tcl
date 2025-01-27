@@ -78,73 +78,83 @@ namespace eval lacey {
 	return ok
     }
 
-    proc open_calibration_relay {adu100_index} {
-	# Open the calibration relay to disconnect the calibration resistor
-	#
-	# Arguments:
-	#   adu100_index -- integer index choosing the ADU100
-	set high_time_ms 100
-
-	# Pulse PA3 relative to PA0 to open the relay
-	set result [tcladu::send_command $adu100_index "RA0"]
-	set result [tcladu::send_command $adu100_index "SA3"]
-	after $high_time_ms
-	set result [tcladu::send_command $adu100_index "RA3"]
-
-	# Read PA1
-	set result [tcladu::query $adu100_index "RPA1"]
-	set success_code [lindex $result 0]
-	if {$success_code == 0} {
-	    set relay_state [lindex $result 1]
-	    if {$relay_state == 1} {
-		# An open relay will let PA1 be pulled up
-		logtable::info_message "Calibration relay is open (Rcal = Inf)"
-		return
-	    } else {
-		logtable::colorputs -color red "Problem opening calibration relay"
-	    }
-	} else {
-	    logtable::colorputs -color red "Problem reading PA1"
-	    exit
-	}
-    }
-
- #    proc close_calibration_relay {adu100_index} {
-# 	# Close the calibration relay to connect the calibration resistor
-# 	# to the output.
-# 	#
-# 	# Arguments:
-# 	#   adu100_index -- integer index choosing the ADU100
-# 	set high_time_ms 100
-#
-# 	# Pulse PA0 relative to PA3 to close the relay
-# 	set result [tcladu::send_command $adu100_index "RA3"]
-# 	set result [tcladu::send_command $adu100_index "SA0"]
-# 	after $high_time_ms
-# 	set result [tcladu::send_command $adu100_index "RA0"]
-# .
-# 	# Read PA1
-# 	set result [tcladu::query $adu100_index "RPA1"]
-# 	set success_code [lindex $result 0]
-# 	if {$success_code == 0} {
-# 	    set relay_state [lindex $result 1]
-# 	    if {$relay_state == 0} {
-# 		# A closed relay will pull down PA1
-# 		logtable::info_message "Calibration relay is closed (Rcal = $calibration::calibration_resistor_ohms ohms)"
-# 		return
-# 	    } else {
-# 		logtable::colorputs -newline "Problem closing calibration relay" red
-# 	    }
-# 	} else {
-# 	    logtable::colorputs -newline "Problem reading PA1" red
-# 	    exit
-# 	}
-#     }
-
+    # proc open_calibration_relay {adu100_index} {
+    # 	# Open the calibration relay to disconnect the calibration resistor
+    # 	#
+    # 	# Arguments:
+    # 	#   adu100_index -- integer index choosing the ADU100
+    # 	set high_time_ms 100
+    #
+    # 	# Pulse PA3 relative to PA0 to open the relay
+    # 	set result [tcladu::send_command $adu100_index "RA0"]
+    # 	set result [tcladu::send_command $adu100_index "SA3"]
+    # 	after $high_time_ms
+    # 	set result [tcladu::send_command $adu100_index "RA3"]
+    #
+    # 	# Read PA1
+    # 	set result [tcladu::query $adu100_index "RPA1"]
+    # 	set success_code [lindex $result 0]
+    # 	if {$success_code == 0} {
+    # 	    set relay_state [lindex $result 1]
+    # 	    if {$relay_state == 1} {
+    # 		# An open relay will let PA1 be pulled up
+    # 		logtable::info_message "Calibration relay is open (Rcal = Inf)"
+    # 		return
+    # 	    } else {
+    # 		logtable::colorputs -color red "Problem opening calibration relay"
+    # 	    }
+    # 	} else {
+    # 	    logtable::colorputs -color red "Problem reading PA1"
+    # 	    exit
+    # 	}
+    # }
 }
 
 proc ::lacey::make_verbose {} {
     return "-v"
+}
+
+proc ::lacey::open_calibration_relay { args } {
+    # Open the calibration relay to disconnect the calibration resistor
+    # to the output.  The output will then be high-Z.
+    set usage "--> usage: open_calibration_relay \[options\]"
+    set myoptions {
+	{adu100_index.arg "0" "ADU100 index"}
+	{v "Verbose output"}
+    }
+    array set arg [::cmdline::getoptions args $myoptions $usage]
+
+    # This is a latching relay, which opens and closes with a pulse.
+    # Set the width of the pulse.
+    set high_time_ms 100
+
+    # Pulse PA3 relative to PA0 to open the relay
+    set result [tcladu::send_command $arg(adu100_index) "RA0"]
+    set result [tcladu::send_command $arg(adu100_index) "SA3"]
+    after $high_time_ms
+    set result [tcladu::send_command $arg(adu100_index) "RA3"]
+
+    # Make sure the relay opened by reading PA1
+    set result [tcladu::query $arg(adu100_index) "RPA1"]
+    set success_code [lindex $result 0]
+    if {$success_code == 0} {
+	set relay_state [lindex $result 1]
+	if {$relay_state == 1} {
+	    # An open relay will let PA1 be pulled up
+	    if $arg(v) {
+		logtable::info_message "Calibration relay is open (Rcal = Inf)"
+	    }
+	    return
+	} else {
+	    set message "Problem opening calibration relay"
+	    logtable::fail_message $message
+	    error $message
+	}
+    } else {
+	set message "Problem reading PA1"
+	logtable::fail_message $message
+	error $message
+    }
 }
 
 proc ::lacey::close_calibration_relay { args } {
@@ -303,7 +313,7 @@ proc ::lacey::calibrate_current_offset { args } {
     lacey::close_source_relay -adu100_index $arg(adu100_index)
 
     # Open the calibration relay (Rcal = Inf)
-    lacey::open_calibration_relay $arg(adu100_index)
+    lacey::open_calibration_relay -adu100_index $arg(adu100_index)
     set Rcal_ohms "Inf"
 
     puts ""
@@ -356,7 +366,7 @@ proc lacey::calibrate_current_slope { args } {
     set offset_counts [lindex [dict get $calibration::cal_dict $serial_number offset_list] $arg(range)]
 
     # Close the source relay
-    lacey::close_source_relay -adu100_index $arg(adu100_index)
+    lacey::close_source_relay -adu100_index $arg(adu100_index) [if $arg(v) lacey::make_verbose]
 
     # Close the calibration relay (Rcal = Rcal)
     close_calibration_relay -adu100_index $arg(adu100_index) [if $arg(v) lacey::make_verbose]
@@ -397,8 +407,8 @@ proc lacey::calibrate_current_slope { args } {
     set message "Range $arg(range) slope is [format %0.3f $slope_average_counts_per_amp] counts/Amp"
     logtable::info_message $message
     database::write_cal_dict
-    open_source_relay $arg(adu100_index)
-    open_calibration_relay $arg(adu100_index)
+    open_source_relay -adu100_index $arg(adu100_index) [if $arg(v) lacey::make_verbose]
+    open_calibration_relay -adu100_index $arg(adu100_index) [if $arg(v) lacey::make_verbose]
 }
 
 proc ::lacey::status_led {args} {
