@@ -462,17 +462,19 @@ namespace eval dryrun {
     # Table column widths
     variable iteration_width 10
     variable counts_width 15
-    variable raw_voltage_width 15
-    variable cal_mA_width 15
+    variable voltage_width 15
+    variable current_width 15
 
     # Alternating widths and names for the dryrun table
     set column_list [list]
     lappend column_list [list $iteration_width "Read"]
-    lappend column_list [list $counts_width "AN1 Counts"]
-    lappend column_list [list $raw_voltage_width "Raw"]
-    lappend column_list [list $cal_mA_width "Current"]
-    lappend column_list [list $counts_width "AN2 Counts"]
-    lappend column_list [list $raw_voltage_width "Voltage"]
+    lappend column_list [list $iteration_width "Range"]
+    lappend column_list [list $voltage_width "Voltage"]
+    lappend column_list [list $counts_width "AN1 (N)"]
+    lappend column_list [list $counts_width "Slope (N/A)"]
+    lappend column_list [list $counts_width "Offset (N)"]
+    lappend column_list [list $current_width "Current"]
+
 }
 
 namespace eval mainrun {
@@ -548,6 +550,7 @@ if {$params(sn) ne ""} {
 } else {
     set adu100_index 0
 }
+set serial_number [lindex $calibration::serial_number_list $adu100_index]
 
 puts -nonewline "Initializing ADU100 $adu100_index..."
 puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
@@ -581,12 +584,14 @@ after 1000
 
 puts [lacey::calibrated_current_A -adu100_index $adu100_index -range $params(g)]
 lacey::open_source_relay -adu100_index $adu100_index
-exit
+
+after 1000
 
 # Start the dry run
+lacey::close_source_relay -adu100_index $adu100_index -v
+
 puts [logtable::header_line -collist $dryrun::column_list]
 puts [logtable::dashline -collist $dryrun::column_list]
-
 foreach reading [logtable::intlist -first 0 -length 10] {
     # set an1_counts [an1_bipolar_counts $adu100_index $params(g)]
     # set an1_V [anx_bipolar_volts $an1_counts $params(g)]
@@ -594,17 +599,30 @@ foreach reading [logtable::intlist -first 0 -length 10] {
     # set an1_mA [expr 1000 * $an1_A]
     # set an1_mV [expr 1000 * $an1_V]
 
-    set an2_counts [an2_unipolar_counts $adu100_index $config::an2_gain]
-    set an2_V [an2_unipolar_volts $an2_counts $config::an2_gain]
+    # Read differential voltage corresponding to output current
+    set an1_counts [lacey::an1_counts -adu100_index $adu100_index -range $params(g)]
+
+    # Read Vout
+    set an2_counts [lacey::an2_counts -adu100_index $adu100_index]
+    set an2_V [lacey::an2_volts -counts $an2_counts]
+
+    set slope_counts_per_amp [lindex [dict get $calibration::cal_dict $serial_number slope_list] $params(g)]
+    set offset_counts [lindex [dict get $calibration::cal_dict $serial_number offset_list] $params(g)]
+    set calibrated_measurement_A [lacey::calibrated_current_A -adu100_index $adu100_index -range $params(g)]
+
     set value_list [list $reading \
-			[format %i $an1_counts] \
-			"[logtable::engineering_notation -number $an1_V -digits 3]V" \
-			"[logtable::engineering_notation -number $an1_A -digits 3]A" \
-			[format %i $an2_counts] \
-			"[logtable::engineering_notation -number $an2_V -digits 3]V"]
+			$params(g) \
+			"[logtable::engineering_notation -number $an2_V -digits 3]V" \
+			$an1_counts \
+			"[logtable::engineering_notation -number $slope_counts_per_amp -digits 5]" \
+			$offset_counts \
+			"[logtable::engineering_notation -number $calibrated_measurement_A -digits 3]A"]
+
     puts [logtable::table_row -collist $dryrun::column_list -vallist $value_list]
     after 1000
 }
+
+exit
 
 puts ""
 puts "Press q<enter> to stop logging"
