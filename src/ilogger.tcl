@@ -83,6 +83,7 @@ append usage "usage: [file tail $thisfile] \[options\]"
 lappend options [list sn.arg "" "ADU100 serial number (Empty if only one)"]
 lappend options [list g.arg 0 "Analog measurement gain (0, 1, ..., 7)"]
 lappend options [list c "Calibrate and exit"]
+lappend options [list d "Dry run and exit"]
 lappend options [list v "Make more verbose"]
 
 set invocation "tclsh ilogger.tcl $argv"
@@ -250,36 +251,6 @@ proc initialize_adu100 { adu100_index an1_gain an2_gain } {
 
     lacey::initialize -adu100_index $adu100_index
     return ok
-}
-
-proc open_relay { adu100_index } {
-    # Open the relay
-    #
-    # Arguments:
-    #   adu100_index -- integer index choosing the ADU100
-    set result [tcladu::send_command $adu100_index "RK0"]
-    set success_code [lindex $result 0]
-    if {$success_code == 0} {
-	return ok
-    } else {
-	colorputs -newline "Problem openning the relay" red
-	exit
-    }
-}
-
-proc close_relay { adu100_index } {
-    # Close the relay
-    #
-    # Arguments:
-    #   adu100_index -- integer index choosing the ADU100
-    set result [tcladu::send_command $adu100_index "SK0"]
-    set success_code [lindex $result 0]
-    if {$success_code == 0} {
-	return ok
-    } else {
-	colorputs -newline "Problem closing the relay" red
-	exit
-    }
 }
 
 proc status_led {args} {
@@ -482,19 +453,13 @@ namespace eval mainrun {
 
     # Table column widths
     variable time_width 10
-    variable an1_counts_width 15
-    variable an1_voltage_width 15
     variable cal_current_width 15
-    variable an2_counts_width 15
     variable cal_voltage_width 15
 
     # Alternating widths and names for the mainrun table
     set column_list [list]
     lappend column_list [list $time_width "Time (s)"]
-    lappend column_list [list $an1_counts_width "AN1 Counts"]
-    lappend column_list [list $an1_voltage_width "Raw"]
     lappend column_list [list $cal_current_width "Current"]
-    lappend column_list [list $an2_counts_width "AN2 Counts"]
     lappend column_list [list $cal_voltage_width "Voltage"]
 }
 
@@ -578,51 +543,45 @@ puts [status_led -adu100_index 0 -setting "off"]
 
 set fid [initialize_datafile]
 
-lacey::close_source_relay -adu100_index $adu100_index -v
-# Wait for reading to settle
-after 1000
+if $params(d) {
+    # Start the dry run
+    lacey::close_source_relay -adu100_index $adu100_index -v
 
-puts [lacey::calibrated_current_A -adu100_index $adu100_index -range $params(g)]
-lacey::open_source_relay -adu100_index $adu100_index
-
-after 1000
-
-# Start the dry run
-lacey::close_source_relay -adu100_index $adu100_index -v
-
-puts [logtable::header_line -collist $dryrun::column_list]
-puts [logtable::dashline -collist $dryrun::column_list]
-foreach reading [logtable::intlist -first 0 -length 10] {
-    # set an1_counts [an1_bipolar_counts $adu100_index $params(g)]
-    # set an1_V [anx_bipolar_volts $an1_counts $params(g)]
-    # set an1_A [A_from_V $an1_V $params(g) $calibration::cal_dict]
-    # set an1_mA [expr 1000 * $an1_A]
-    # set an1_mV [expr 1000 * $an1_V]
-
-    # Read differential voltage corresponding to output current
-    set an1_counts [lacey::an1_counts -adu100_index $adu100_index -range $params(g)]
-
-    # Read Vout
-    set an2_counts [lacey::an2_counts -adu100_index $adu100_index]
-    set an2_V [lacey::an2_volts -counts $an2_counts]
-
-    set slope_counts_per_amp [lindex [dict get $calibration::cal_dict $serial_number slope_list] $params(g)]
-    set offset_counts [lindex [dict get $calibration::cal_dict $serial_number offset_list] $params(g)]
-    set calibrated_measurement_A [lacey::calibrated_current_A -adu100_index $adu100_index -range $params(g)]
-
-    set value_list [list $reading \
-			$params(g) \
-			"[logtable::engineering_notation -number $an2_V -digits 3]V" \
-			$an1_counts \
-			"[logtable::engineering_notation -number $slope_counts_per_amp -digits 5]" \
-			$offset_counts \
-			"[logtable::engineering_notation -number $calibrated_measurement_A -digits 3]A"]
-
-    puts [logtable::table_row -collist $dryrun::column_list -vallist $value_list]
+    # Wait for reading to settle
     after 1000
-}
 
-exit
+    puts [logtable::header_line -collist $dryrun::column_list]
+    puts [logtable::dashline -collist $dryrun::column_list]
+    foreach reading [logtable::intlist -first 0 -length 10] {
+
+	# Read differential voltage corresponding to output current
+	set an1_counts [lacey::an1_counts -adu100_index $adu100_index -range $params(g)]
+
+	# Read Vout
+	set an2_counts [lacey::an2_counts -adu100_index $adu100_index]
+	set an2_V [lacey::an2_volts -counts $an2_counts]
+
+	set slope_counts_per_amp [lindex [dict get $calibration::cal_dict $serial_number slope_list] $params(g)]
+	set offset_counts [lindex [dict get $calibration::cal_dict $serial_number offset_list] $params(g)]
+	set calibrated_measurement_A [lacey::calibrated_current_A -adu100_index $adu100_index -range $params(g)]
+
+	set value_list [list $reading \
+			    $params(g) \
+			    "[logtable::engineering_notation -number $an2_V -digits 4]V" \
+			    $an1_counts \
+			    "[logtable::engineering_notation -number $slope_counts_per_amp -digits 5]" \
+			    $offset_counts \
+			    "[logtable::engineering_notation -number $calibrated_measurement_A -digits 6]A"]
+
+	puts [logtable::table_row -collist $dryrun::column_list -vallist $value_list]
+
+	# Time between samples
+	after 100
+
+    }
+    lacey::open_source_relay -adu100_index $adu100_index
+    exit
+}
 
 puts ""
 puts "Press q<enter> to stop logging"
@@ -638,6 +597,8 @@ puts $fid "# Time (s), Voltage (V), Current (A)"
 set time_offset_s [clock seconds]
 
 # Start the main run
+lacey::close_source_relay -adu100_index $adu100_index
+
 puts [logtable::header_line -collist $mainrun::column_list]
 puts [logtable::dashline -collist $mainrun::column_list]
 
@@ -661,30 +622,24 @@ while true {
     set time_stamp_s [format %0.3f $time_delta_s]
 
     # Collect data
-    set an1_N [an1_bipolar_counts $adu100_index $params(g)]
-    set an1_V [anx_bipolar_volts $an1_N $params(g)]
-    set an1_A [A_from_V $an1_V $params(g) $calibration::cal_dict]
+    set calibrated_measurement_A [lacey::calibrated_current_A -adu100_index $adu100_index -range $params(g)]
 
-    set an2_N [an2_unipolar_counts $adu100_index $config::an2_gain]
-    set an2_V [an2_unipolar_volts $an2_N $config::an2_gain]
+    set an2_counts [lacey::an2_counts -adu100_index $adu100_index]
+    set an2_V [lacey::an2_volts -counts $an2_counts]
 
     # Print to real-time log
     set value_list [list $time_stamp_s \
-			[format %i $an1_N] \
-			"[logtable::engineering_notation -number $an1_V -digits 3]V" \
-			"[logtable::engineering_notation -number $an1_A -digits 3]A" \
-			[format %i $an2_N] \
+			"[logtable::engineering_notation -number $calibrated_measurement_A -digits 3]A" \
 			"[logtable::engineering_notation -number $an2_V -digits 3]V"]
     puts [logtable::table_row -collist $mainrun::column_list -vallist $value_list]
 
-    puts $fid "$time_stamp_s, [format %0.3e $an2_V], [format %0.3e $an1_A]"
+    puts $fid "$time_stamp_s, [format %0.3e $an2_V], [format %0.3e $calibrated_measurement_A]"
     set keypress [string trim [read stdin 1]]
     if {$keypress eq "q"} {
+	lacey::open_source_relay -adu100_index $adu100_index
 	break
     }
 }
-
-after 1000 [open_relay $adu100_index]
 
 # close channels
 close $fid
