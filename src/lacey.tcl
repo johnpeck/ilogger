@@ -510,36 +510,3 @@ proc ::lacey::calibrated_current_A {args} {
 
 }
 
-########################### Define tables ############################
-
-namespace eval current_offset_calibration {
-    # Configure the current offset calibration table
-
-    # Table column widths
-    variable iteration_width 10
-    variable counts_width 12
-
-    # Alternating widths and names for the table
-    lappend column_list [list $iteration_width "Read"]
-    lappend column_list [list $iteration_width "Rcal"]
-    lappend column_list [list $iteration_width "Range"]
-    lappend column_list [list $counts_width "Offset"]
-}
-
-namespace eval current_slope_calibration {
-    # Configure the current slope calibration table
-
-    # Table column widths
-    variable iteration_width 10
-    variable counts_width 12
-    variable current_width 12
-
-    # Alternating widths and names for the table
-    lappend column_list [list $iteration_width "Read"]
-    lappend column_list [list $iteration_width "Rcal"]
-    lappend column_list [list $iteration_width "Range"]
-    lappend column_list [list $current_width "Vout"]
-    lappend column_list [list $current_width "Cal I"]
-    lappend column_list [list $counts_width "Signed N"]
-    lappend column_list [list $current_width "Slope"]
-}

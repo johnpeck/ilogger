@@ -73,6 +73,9 @@ source database.tcl
 # Working with the Lacey board
 source lacey.tcl
 
+# Text table definitions
+source tables.tcl
+
 ######################## Command-line parsing ########################
 
 set usage "-- "
@@ -461,26 +464,6 @@ namespace eval mainrun {
     lappend column_list [list $time_width "Time (s)"]
     lappend column_list [list $cal_current_width "Current"]
     lappend column_list [list $cal_voltage_width "Voltage"]
-}
-
-namespace eval calibration_check_table {
-    # Configure the calibration check table
-
-    # Table column widths
-    variable iteration_width 10
-    variable counts_width 12
-    variable measurement_width 12
-
-    # Alternating widths and names for the table
-    lappend column_list [list $iteration_width "Read"]
-    lappend column_list [list $iteration_width "Rcal"]
-    lappend column_list [list $iteration_width "Range"]
-    lappend column_list [list $measurement_width "Vout"]
-    lappend column_list [list $measurement_width "Cal I"]
-    lappend column_list [list $counts_width "Signed N"]
-    lappend column_list [list $measurement_width "Slope"]
-    lappend column_list [list $measurement_width "Offset"]
-    lappend column_list [list $measurement_width "Calibrated"]
 }
 
 ########################## Main entry point ##########################
