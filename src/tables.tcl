@@ -2,7 +2,7 @@
 
 # Table definitions
 
-namespace eval current_offset_calibration {
+namespace eval current_offset_calibration_table {
     # Configure the current offset calibration table
 
     # Table column widths
@@ -16,7 +16,7 @@ namespace eval current_offset_calibration {
     lappend column_list [list $counts_width "Offset"]
 }
 
-namespace eval current_slope_calibration {
+namespace eval current_slope_calibration_table {
     # Configure the current slope calibration table
 
     # Table column widths

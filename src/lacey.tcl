@@ -286,8 +286,8 @@ proc ::lacey::calibrate_current_offset { args } {
     set Rcal_ohms "Inf"
 
     puts ""
-    puts [logtable::header_line -collist $current_offset_calibration::column_list]
-    puts [logtable::dashline -collist $current_offset_calibration::column_list]
+    puts [logtable::header_line -collist $current_offset_calibration_table::column_list]
+    puts [logtable::dashline -collist $current_offset_calibration_table::column_list]
 
     # Readings with the calibration relay open
     set offset_sum 0
@@ -300,7 +300,7 @@ proc ::lacey::calibrate_current_offset { args } {
 			    $Rcal_ohms \
 			    $arg(range) \
 			    [format %i $an1_counts]]
-	puts [logtable::table_row -collist $current_offset_calibration::column_list -vallist $value_list]
+	puts [logtable::table_row -collist $current_offset_calibration_table::column_list -vallist $value_list]
 	after 100
     }
     set offset_average [expr double($offset_sum)/$readings]
@@ -342,8 +342,8 @@ proc lacey::calibrate_current_slope { args } {
     set Rcal_ohms $calibration::calibration_resistor_ohms
 
     puts ""
-    puts [logtable::header_line -collist $current_slope_calibration::column_list]
-    puts [logtable::dashline -collist $current_slope_calibration::column_list]
+    puts [logtable::header_line -collist $current_slope_calibration_table::column_list]
+    puts [logtable::dashline -collist $current_slope_calibration_table::column_list]
 
     # Readings with the calibration relay closed
     set slope_sum_counts_per_amp 0
@@ -365,7 +365,7 @@ proc lacey::calibrate_current_slope { args } {
 			    "[format %0.3f [expr 1000 * $ical_A]] mA" \
 			    [format %i $an1_counts] \
 			    [format %0.3f $slope_counts_per_amp]]
-	puts [logtable::table_row -collist $current_slope_calibration::column_list -vallist $value_list]
+	puts [logtable::table_row -collist $current_slope_calibration_table::column_list -vallist $value_list]
 	after 100
     }
     set slope_average_counts_per_amp [expr double($slope_sum_counts_per_amp)/$readings]
