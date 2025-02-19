@@ -166,18 +166,6 @@ proc colorputs {newline text color} {
 
 }
 
-proc textable_column_titles { column_list } {
-    # Return a comma-separated list of column titles
-    #
-    # Arguments:
-    #   column_list -- List of alternating column widths and titles
-    foreach { width title } $column_list {
-	lappend title_list $title
-    }
-    set csv_list [join $title_list ", "]
-    return $csv_list
-}
-
 proc calibrate_an1 { adu100_index  gain_setting } {
     # Have the ADU100 perform an auto-calibration on the AN1 analog
     # input in bipolar mode.
@@ -254,33 +242,6 @@ proc initialize_adu100 { adu100_index an1_gain an2_gain } {
 
     lacey::initialize -adu100_index $adu100_index
     return ok
-}
-
-proc status_led {args} {
-    # Turn the status LED on or off
-    #
-    # Arguments:
-    #   adu100_index -- Which ADU100 to use
-    #   setting -- on or off
-    set myoptions {
-	{adu100_index.arg 0 "ADU100 index"}
-	{setting.arg "off" "On or off"}
-    }
-    array set arg [::cmdline::getoptions args $myoptions]
-
-    if {$arg(setting) eq "on"} {
-	set result [tcladu::send_command $arg(adu100_index) "SA2"]
-    } else {
-	set result [tcladu::send_command $arg(adu100_index) "RA2"]
-    }
-    set success_code [lindex $result 0]
-    if {$success_code == 0} {
-	return ok
-    } else {
-	colorputs -newline "Problem setting the status LED" red
-	exit
-    }
-
 }
 
 proc gain_from_setting { gain_setting } {
@@ -506,7 +467,7 @@ puts [initialize_adu100 $adu100_index $params(g) $config::an2_gain]
 database::init_cal_dict -serial [lindex $calibration::serial_number_list $adu100_index]
 
 logtable::info_message "Read in calibration data:"
-pdict $calibration::cal_dict
+# pdict $calibration::cal_dict
 
 if $params(c) {
     # Calibrate in the chosen current range and exit
@@ -520,9 +481,9 @@ if $params(c) {
 }
 
 # Turn the LED on
-puts [status_led -adu100_index 0 -setting "on"]
+puts [lacey::status_led -adu100_index 0 -setting "on"]
 after 500
-puts [status_led -adu100_index 0 -setting "off"]
+puts [lacey::status_led -adu100_index 0 -setting "off"]
 
 set fid [initialize_datafile]
 
