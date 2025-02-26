@@ -375,8 +375,18 @@ proc test_calibration { args } {
 	after 100
     }
     set current_average_milliamps [expr double($measured_current_sum_amps)/$readings * 1000]
+
+    # Report calibrated measurement
     set message "Measurement in range $arg(range) slope is [format %0.3f $current_average_milliamps] mA"
     logtable::info_message $message
+
+    # Report range full scale
+    #
+    # Full scale in Amps is (32767 - offset)/slope
+    set full_scale_A [expr -(32767 - $offset_counts)/double($slope_counts_per_amp)]
+    set message "Range $arg(range) full scale is [logtable::engineering_notation -number $full_scale_A -digits 3]A"
+    logtable::info_message $message
+
     lacey::open_source_relay -adu100_index $arg(adu100_index)
     lacey::open_calibration_relay $arg(adu100_index)
 
