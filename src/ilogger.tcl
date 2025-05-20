@@ -17,6 +17,10 @@ set invoked_directory [pwd]
 
 ####################### Packages and libraries #######################
 
+# Tin installs user packages in ~/.local/share/tcltk.  We need to add
+# that to the package search list.
+lappend auto_path "~/.local/share/tcltk"
+
 # Load tcladu
 try {
     set version [package require -exact tcladu 1.1.3]
@@ -56,6 +60,11 @@ try {
 try {
     set version [package require logtable]
     puts "Loaded logtable version $version"
+    set action_script [package ifneeded logtable $version]
+    puts "  Action script is:"
+    foreach line [split $action_script "\n"] {
+	puts "  $line"
+    }
 } trap {} {message optdict} {
     puts "Error requiring logtable"
     puts $message
