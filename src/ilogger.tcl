@@ -570,7 +570,8 @@ while true {
     if { $count > 10 } {
 	# Output another header line and reset the counter
 	puts ""
-	puts [logtable::header_line -collist $mainrun::column_list]
+	puts -nonewline [logtable::header_line -collist $mainrun::column_list]
+	puts "Press q<enter> to quit"
 	puts [logtable::dashline -collist $mainrun::column_list]
 	set count 0
     } else {
