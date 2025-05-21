@@ -71,7 +71,7 @@ namespace eval database {
 	set slope_list [list]
 	set offset_list [list]
 	if {$found_table eq $arg(serial)} {
-	    puts "table exists"
+	    ::logtable::info_message "Reading existing $database::db_file"
 	    # Read the table into a dictionary
 	    foreach range [logtable::intlist -length 8] {
 		db eval "SELECT * FROM $arg(serial) WHERE range = $range" values {

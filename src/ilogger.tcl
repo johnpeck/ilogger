@@ -492,9 +492,9 @@ if $params(c) {
     # Calibrate in the chosen current range and exit
     lacey::calibrate_current_offset -adu100_index 0 -range $params(g)
 
-    pdict $calibration::cal_dict
+    # pdict $calibration::cal_dict
     lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
-    pdict $calibration::cal_dict
+    # pdict $calibration::cal_dict
     test_calibration -adu100_index 0 -range $params(g) [if $params(v) make_verbose]
     exit
 }
