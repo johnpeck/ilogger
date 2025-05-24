@@ -94,7 +94,8 @@ append usage "usage: [file tail $thisfile] \[options\]"
 
 lappend options [list sn.arg "" "ADU100 serial number (Empty if only one)"]
 lappend options [list g.arg 0 "Analog measurement gain (0, 1, ..., 7)"]
-lappend options [list c "Calibrate and exit"]
+lappend options [list c "Calibrate single range (specified by -g) and exit"]
+lappend options [list ca "Calibrate all ranges and exit"]
 lappend options [list d "Dry run and exit"]
 lappend options [list v "Make more verbose"]
 
@@ -496,6 +497,22 @@ if $params(c) {
     lacey::calibrate_current_slope -adu100_index 0 -range $params(g)
     # pdict $calibration::cal_dict
     test_calibration -adu100_index 0 -range $params(g) [if $params(v) make_verbose]
+    exit
+}
+
+if $params(ca) {
+    # Calibrate all ranges and exit
+    #
+    # We can only directly calibrate ranges 0 --> 5 with a 50mA
+    # calibration current and a 1-ohm sense resistor.
+    foreach range [logtable::intlist -first 0 -length 6] {
+	# Calibrate in the chosen current range and exit
+	lacey::calibrate_current_offset -adu100_index 0 -range $range
+
+	lacey::calibrate_current_slope -adu100_index 0 -range $range
+
+	test_calibration -adu100_index 0 -range $range [if $params(v) make_verbose]
+    }
     exit
 }
 
