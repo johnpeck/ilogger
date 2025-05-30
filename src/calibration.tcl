@@ -3,14 +3,16 @@
 ####################### Packages and libraries #######################
 
 # logtable
-try {
-    set version [package require logtable]
-} trap {} {message optdict} {
-    puts "Failed to load logtable package:"
-    puts $message
-    puts ""
-    puts "You can install the latest version with Tin"
-    exit
+if !{[package present logtable]} {
+    try {
+	set version [package require logtable]
+    } trap {} {message optdict} {
+	puts "Failed to load logtable package:"
+	puts $message
+	puts ""
+	puts "You can install the latest version with Tin"
+	exit
+    }
 }
 
 namespace eval calibration {

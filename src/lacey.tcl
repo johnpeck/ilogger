@@ -3,36 +3,42 @@
 ####################### Packages and libraries #######################
 
 # tcladu
-try {
-    set version [package require -exact tcladu 1.1.3]
-    puts "Loaded tcladu version $version"
-} trap {} {message optdict} {
-    puts "Error requiring tcladu"
-    puts $message
-    exit
+if { [catch {package present tcladu}] } {
+    try {
+	set version [package require -exact tcladu 1.1.3]
+	puts "Loaded tcladu version $version"
+    } trap {} {message optdict} {
+	puts "Error requiring tcladu"
+	puts $message
+	exit
+    }
 }
 
 # logtable
-try {
-    set version [package require logtable]
-} trap {} {message optdict} {
-    puts "Failed to load logtable package:"
-    puts $message
-    puts ""
-    puts "You can install the latest version with Tin"
-    exit
+if { [catch {package present logtable}] } {
+    try {
+	set version [package require logtable]
+    } trap {} {message optdict} {
+	puts "Failed to load logtable package:"
+	puts $message
+	puts ""
+	puts "You can install the latest version with Tin"
+	exit
+    }
 }
 
 # Command-line parsing
 #
 # cmdline comes from tcllib
-try {
-    set version [package require cmdline]
-    puts "Loaded cmdline version $version"
-} trap {} {message optdict} {
-    puts "Error requiring cmdline"
-    puts $message
-    exit
+if { [catch {package present cmdline}] } {
+    try {
+	set version [package require cmdline]
+	puts "Loaded cmdline version $version"
+    } trap {} {message optdict} {
+	puts "Error requiring cmdline"
+	puts $message
+	exit
+    }
 }
 
 # Functions and variables for working with the ADU100 / Lacey (ADSM100) combination

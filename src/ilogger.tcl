@@ -25,6 +25,11 @@ lappend auto_path "~/.local/share/tcltk"
 try {
     set version [package require -exact tcladu 1.1.3]
     puts "Loaded tcladu version $version"
+    set action_script [package ifneeded tcladu $version]
+    puts "  Action script is:"
+    foreach line [split $action_script "\n"] {
+	puts "  $line"
+    }
 } trap {} {message optdict} {
     puts "Error requiring tcladu"
     puts $message
@@ -37,6 +42,11 @@ try {
 try {
     set version [package require cmdline]
     puts "Loaded cmdline version $version"
+    set action_script [package ifneeded cmdline $version]
+    puts "  Action script is:"
+    foreach line [split $action_script "\n"] {
+	puts "  $line"
+    }
 } trap {} {message optdict} {
     puts "Error requiring cmdline"
     puts $message
@@ -49,6 +59,11 @@ try {
 try {
     set version [package require inifile]
     puts "Loaded inifile version $version"
+    set action_script [package ifneeded inifile $version]
+    puts "  Action script is:"
+    foreach line [split $action_script "\n"] {
+	puts "  $line"
+    }
     ini::commentchar "#"
 } trap {} {message optdict} {
     puts "Error requiring inifile"
@@ -87,6 +102,7 @@ source tables.tcl
 
 ######################## Command-line parsing ########################
 
+puts ""
 set usage "-- "
 append usage "Plot sense resistor currents from ADU100"
 append usage "\n\n"
