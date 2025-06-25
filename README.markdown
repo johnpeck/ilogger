@@ -92,3 +92,36 @@ Ilogger uses (SQLite)[https://sqlite.org/] to store calibration data in between 
 sudo apt install libsqlite3-tcl
 ```
 
+### Test the installation ###
+
+Test things by running `ilogger.tcl -h` from the `src/` directory:
+
+```bash
+$ ilogger/src: tclsh ilogger.tcl -h
+Loaded tcladu version 1.1.3
+  Action script is:
+  load /usr/share/tcltk/tcladu1.1.3/tcladu.so
+  source /usr/share/tcltk/tcladu1.1.3/tcladu.tcl
+Loaded cmdline version 1.5
+  Action script is:
+  source /usr/share/tcltk/tcllib1.20/cmdline/cmdline.tcl
+Loaded inifile version 0.3.1
+  Action script is:
+  source /usr/share/tcltk/tcllib1.20/inifile/ini.tcl
+Loaded logtable version 1.6
+  Action script is:
+  source ~/.local/share/tcltk/logtable-1.6/logtable.tcl
+
+ilogger -- Plot sense resistor currents from ADU100
+
+usage: ilogger.tcl [options]
+ -sn value            ADU100 serial number (Empty if only one) <>
+ -g value             Analog measurement gain (0, 1, ..., 7) <0>
+ -c                   Calibrate single range (specified by -g) and exit
+ -ca                  Calibrate all ranges and exit
+ -d                   Dry run and exit
+ -v                   Make more verbose
+ --                   Forcibly stop option processing
+ -help                Print this message
+ -?                   Print this message
+```
