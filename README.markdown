@@ -14,6 +14,7 @@ Demo software for the for the [tcladu](https://github.com/johnpeck/tcladu) proje
     - [Install Tcllib](#install-tcllib)
     - [Clone Logtable](#clone-logtable)
     - [Install Tcl bindings to sqlite](#install-tcl-bindings-to-sqlite)
+  - [Test the installation](#test-the-installation)
 
 <!-- markdown-toc end -->
 
@@ -92,7 +93,7 @@ Ilogger uses (SQLite)[https://sqlite.org/] to store calibration data in between 
 sudo apt install libsqlite3-tcl
 ```
 
-### Test the installation ###
+## Test the installation ##
 
 Test things by running `ilogger.tcl -h` from the `src/` directory:
 
