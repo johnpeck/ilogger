@@ -87,7 +87,7 @@ git clone https://github.com/johnpeck/logtable.git
 
 ### Install Tcl bindings to sqlite ###
 
-Ilogger uses (SQLite)[https://sqlite.org/] to store calibration data in between runs.
+Ilogger uses [SQLite](https://sqlite.org/) to store calibration data in between runs.
 
 ```bash
 sudo apt install libsqlite3-tcl
